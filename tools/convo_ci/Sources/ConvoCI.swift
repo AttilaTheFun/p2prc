@@ -19,7 +19,7 @@ struct ConvoCI: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "convo_ci",
         abstract: "CI's own steps for Convo.",
-        subcommands: [StampVersion.self, Proof.self, Team.self, VerifyAlphas.self])
+        subcommands: [StampVersion.self, Proof.self, Team.self, VerifyAlphas.self, Replaces.self])
 }
 
 struct Failure: Error, CustomStringConvertible {
@@ -556,5 +556,46 @@ struct AppleChecker {
         if let info { guard slot(1) == sha256(info) else { throw Failure("\(name)'s Info.plist isn't the signed one") } }
         if let resources { guard slot(3) == sha256(resources) else { throw Failure("\(name)'s CodeResources isn't the signed one") } }
         return Code(cdhash: Data(sha256(directory).prefix(20)), identifier: identifier, commonName: commonName)
+    }
+}
+
+/// Says, in a release's builds.json, which earlier app each build replaces
+/// (`"replaces": [<bundle id>]` on its line), so Shireworks' Applications
+/// offers the move to someone who has the old one installed: P2PRC's lines
+/// replace Convo's. Run after `sign` has written the lines; a line whose
+/// bundle id has no mapping is left as it is.
+struct Replaces: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        abstract: "Mark builds.json's lines with the bundle ids their apps replace.")
+
+    @Option(help: "builds.json, rewritten in place.")
+    var builds: String
+
+    @Option(name: .customLong("map"), help: "<bundle id>=<the bundle id it replaces>, once per pair.")
+    var pairs: [String]
+
+    func run() throws {
+        var map: [String: String] = [:]
+        for pair in pairs {
+            let parts = pair.split(separator: "=", maxSplits: 1).map(String.init)
+            guard parts.count == 2, !parts[0].isEmpty, !parts[1].isEmpty else { throw ValidationError("\(pair) is not <bundle id>=<replaced bundle id>") }
+            map[parts[0]] = parts[1]
+        }
+        let url = URL(fileURLWithPath: builds)
+        guard var lines = try JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [[String: Any]] else {
+            throw Failure("\(builds) is not an array of builds")
+        }
+        var marked = 0
+        for i in lines.indices {
+            guard let id = lines[i]["bundleID"] as? String, let old = map[id] else { continue }
+            var replaces = lines[i]["replaces"] as? [String] ?? []
+            if !replaces.contains(old) { replaces.append(old) }
+            lines[i]["replaces"] = replaces
+            marked += 1
+        }
+        // As `sign` writes it: pretty-printed, its keys sorted.
+        let data = try JSONSerialization.data(withJSONObject: lines, options: [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes])
+        try (data + Data("\n".utf8)).write(to: url)
+        print("convo_ci: \(marked) of \(lines.count) builds marked with what they replace")
     }
 }
