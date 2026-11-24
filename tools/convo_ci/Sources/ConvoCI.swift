@@ -1,14 +1,15 @@
-// CI's own steps for Convo (.github/workflows/ci.yml), in place of shell:
+// CI's own steps for P2PRC (.github/workflows/build.yml), in place of shell:
 //
 //   convo_ci stamp-version <version>     the version where the apps show it
 //   convo_ci proof --pictures <dir> --out <dir> --version <v> [--tests-log <file>]
 //   convo_ci team --profiles <file>…     the team, from its signing profiles
 //   convo_ci verify-alphas …             a draft's Alphas checked before they're promoted
 //
-// The Info.plists' CFBundleShortVersionString is tools/ci/version_from_tags.sh's
-// (it picks the version); stamp-version writes the same into Client.version
-// (Settings' Version row on every platform) and the Android app's
-// version_name, in the checkout, never committed.
+// The version is tools/ci/version_from_tags.sh's (it picks it from the
+// releases; tools/ci/stamp_apps.sh runs both); stamp-version writes it into
+// the Info.plists' CFBundleShortVersionString, Client.version (Settings'
+// Version row on every platform) and the Android app's version_name and
+// version_code, in the checkout, never committed.
 import ArgumentParser
 import Crypto
 import Foundation
@@ -35,7 +36,8 @@ func checkout() -> URL {
 struct StampVersion: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "stamp-version",
-        abstract: "Stamp the release's version into Client.version and the Android app's version_name.")
+        abstract: "Stamp the release's version into the Info.plists, Client.version and the Android app's version_name and version_code.",
+        discussion: "version_code is MAJOR × 1,000,000 + MINOR × 1,000 + N, so each release's is higher than the last's (as the Playground's).")
 
     @Argument(help: "The version, MAJOR.MINOR.N.")
     var version: String
@@ -52,13 +54,22 @@ struct StampVersion: ParsableCommand {
 
     func run() throws {
         let root = checkout()
+        let plists = ["applications/p2prc_ios/Info.plist", "applications/p2prc_macos/Info.plist"]
+        for plist in plists {
+            try stamp(root.appendingPathComponent(plist), prefix: "<key>CFBundleShortVersionString</key><string>", closing: "<")
+        }
         try stamp(root.appendingPathComponent("libraries/convo_app/Sources/Client.swift"),
                   prefix: "public static let version = \"")
-        try stamp(root.appendingPathComponent("applications/p2prc_android/BUILD.bazel"),
-                  prefix: "version_name = \"")
+        let android = root.appendingPathComponent("applications/p2prc_android/BUILD.bazel")
+        try stamp(android, prefix: "version_name = \"")
+        let numbers = version.split(separator: ".").compactMap { Int($0) }
+        guard numbers.count == 3, numbers[1] < 1000, numbers[2] < 1000 else {
+            throw ValidationError("\(version): MINOR and N must each be under 1000 for its version_code")
+        }
+        try stamp(android, prefix: "version_code = ", closing: ",", value: String(numbers[0] * 1_000_000 + numbers[1] * 1_000 + numbers[2]))
         if let commit {
             guard commit.count == 40, commit.allSatisfy(\.isHexDigit) else { throw ValidationError("\(commit) is not a commit") }
-            for plist in ["applications/p2prc_ios/Info.plist", "applications/p2prc_macos/Info.plist"] {
+            for plist in plists {
                 let file = root.appendingPathComponent(plist)
                 var text = try String(contentsOf: file, encoding: .utf8)
                 guard !text.contains("<key>ConvoCommit</key>"), let end = text.range(of: "</dict>", options: .backwards) else {
@@ -68,11 +79,12 @@ struct StampVersion: ParsableCommand {
                 try text.write(to: file, atomically: true, encoding: .utf8)
             }
         }
-        print("convo_ci: \(version) stamped into Client.version and the Android app's version_name\(commit == nil ? "" : ", the commit into the Info.plists")")
+        print("convo_ci: \(version) stamped into the Info.plists, Client.version and the Android app's version_name and version_code\(commit == nil ? "" : ", the commit into the Info.plists")")
     }
 
-    /// The one line holding `prefix`, its quoted value made the version.
-    func stamp(_ file: URL, prefix: String) throws {
+    /// The one line holding `prefix`: its value, up to `closing`, made the
+    /// version (or `value`).
+    func stamp(_ file: URL, prefix: String, closing: Character = "\"", value: String? = nil) throws {
         let text = try String(contentsOf: file, encoding: .utf8)
         var lines = text.components(separatedBy: "\n")
         let matches = lines.indices.filter { lines[$0].contains(prefix) }
@@ -80,10 +92,10 @@ struct StampVersion: ParsableCommand {
             throw Failure("\(file.lastPathComponent): expected one line with \(prefix)…\", found \(matches.count)")
         }
         let line = lines[at]
-        guard let start = line.range(of: prefix), let end = line[start.upperBound...].firstIndex(of: "\"") else {
-            throw Failure("\(file.lastPathComponent): \(prefix)…\" has no closing quote")
+        guard let start = line.range(of: prefix), let end = line[start.upperBound...].firstIndex(of: closing) else {
+            throw Failure("\(file.lastPathComponent): \(prefix)… has no closing \(closing)")
         }
-        lines[at] = String(line[..<start.upperBound]) + version + String(line[end...])
+        lines[at] = String(line[..<start.upperBound]) + (value ?? version) + String(line[end...])
         try lines.joined(separator: "\n").write(to: file, atomically: true, encoding: .utf8)
     }
 }
@@ -109,6 +121,9 @@ struct Proof: ParsableCommand {
     @Option(help: "The end-to-end run's log (tools/e2e's pair.log): its result an item of the proof.")
     var testsLog: String?
 
+    @Option(help: "The app the proof is of, as Reviews names it.")
+    var app = "P2PRC"
+
     struct Item: Encodable {
         var id: String
         var kind: String
@@ -125,7 +140,7 @@ struct Proof: ParsableCommand {
 
     struct Document: Encodable {
         var format = 2
-        var app = "Convo"
+        var app: String
         var version: String
         var repository: String
         var commit: String
@@ -193,8 +208,9 @@ struct Proof: ParsableCommand {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime]
         let document = Document(
+            app: app,
             version: version,
-            repository: environment["GITHUB_REPOSITORY"] ?? "AttilaTheFun/convo",
+            repository: environment["GITHUB_REPOSITORY"] ?? "AttilaTheFun/p2prc",
             commit: environment["GITHUB_SHA"] ?? "",
             run: environment["GITHUB_RUN_ID"].flatMap(Int.init),
             made: formatter.string(from: Date()),

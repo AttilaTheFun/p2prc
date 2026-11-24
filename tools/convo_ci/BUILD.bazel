@@ -1,8 +1,10 @@
 load("@rules_swift//swift:swift_binary.bzl", "swift_binary")
 
-# CI's own steps for Convo (.github/workflows/ci.yml): the release's version
-# stamped where the apps show it, and the proof assembled from the pictures
-# the verify job took. Built and run in CI's Linux container.
+# CI's own steps for P2PRC (.github/workflows/build.yml): the release's
+# version stamped where the apps show it, the proof assembled from the
+# end-to-end run's pictures and log, and a release's Alphas checked by their
+# own signatures before they're promoted. Built and run in CI's Linux jobs
+# and on its Macs.
 swift_binary(
     name = "convo_ci",
     srcs = glob(["Sources/**/*.swift"]),

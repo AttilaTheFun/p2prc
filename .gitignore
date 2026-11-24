@@ -13,3 +13,7 @@ signing-key
 
 .bazelrc.user
 MODULE.bazel.lock
+
+# CI's own files in the checkout (tools/ci): its downloader settings and the
+# packages it signs.
+/.ci/
