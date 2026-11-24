@@ -43,3 +43,9 @@ committed line (`MAJOR.MINOR.0`); CI stamps each build's own
 `MAJOR.MINOR.N` and a release is tagged `vMAJOR.MINOR.N`. Each release
 carries its proof: two clients paired and messaging through the nodes,
 their link relayed by TURN, with the run's log and screenshots.
+
+CI is `.github/workflows/build.yml` (its header says what runs when, on
+GitHub's runners) and `pages.yml` (a published release's web client to
+p2prc.org). Its scripts are in `tools/ci`, its Swift tool in
+`tools/convo_ci`; signing is build_tools' `sign`, with the `release`
+environment's keys. Drafts are CI's: no agent publishes one or makes a tag.

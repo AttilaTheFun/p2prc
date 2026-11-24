@@ -24,8 +24,9 @@ openwait(){ for t in 1 2 3 4; do xcrun simctl openurl $1 "$2" >/dev/null 2>&1; f
 # reload a tab in the simulator, losing the identity not yet saved).
 create(){ waitfor $1 'Create a new identity' 60; for t in 1 2 3 4; do cmd $1 'text:Create a new identity'; waitfor $1 'Your recovery phrase' 15 && return 0; log "$1 create retry $t"; done; return 1; }
 onboard(){ for t in 1 2 3 4; do if lastof $1 'text:' | grep -q 'Create a new identity'; then log "$1 back at the start (the page reloaded): creating again"; create $1; sleep 2; fi; cmd $1 'toggled'; sleep 2; lastof $1 '"m":"toggled ' | grep -q 'toggled true' || cmd $1 'toggle'; sleep 2; cmd $1 'text:Continue'; waitfor $1 "$2" 20 && return 0; log "$1 onboarding retry $t (switch: $(lastof $1 '"m":"toggled ' | sed 's/.*toggled //'))"; done; return 1; }
-W=$(cd "$ROOT" && bazel cquery --output=files //applications/p2prc_web 2>/dev/null | head -1)
-rm -rf $E/site && cp -R "$ROOT/$W" $E/site && chmod -R u+w $E/site && cp $HERE/driver.js $E/site/
+# The built site, by the execution root (CI's Bazel makes no bazel-out link in the checkout).
+W=$(cd "$ROOT" && echo "$(bazel info execution_root 2>/dev/null)/$(bazel cquery --output=files //applications/p2prc_web 2>/dev/null | head -1)")
+rm -rf $E/site && cp -R "$W" $E/site && chmod -R u+w $E/site && cp $HERE/driver.js $E/site/
 python3 -c "
 p='$E/site/index.html'; s=open(p).read(); open(p,'w').write(s.replace('<head>','<head><script src=\"/driver.js\"></script>',1))"
 pkill -f cmdserver.py; rm -f $E/cmds.txt.* $E/weblog.txt $E/pair.log; (cd $E/site && nohup python3 $HERE/cmdserver.py 8765 $E/weblog.txt $E/cmds.txt >/dev/null 2>&1 &)

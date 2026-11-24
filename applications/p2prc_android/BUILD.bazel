@@ -42,8 +42,8 @@ isomer_android_app(
     label = "P2PRC",
     package = "com.loganshire.p2prc",
     # Kept in step with the iOS and macOS Info.plist versions.
-    version_name = "0.35.0",
-    version_code = 17,
+    version_name = "0.1.0",
+    version_code = 1,
     # ACCESS_NETWORK_STATE: libwebrtc's NetworkMonitor queries connectivity on
     # its network thread; without it the SecurityException aborts the process.
     # RECORD_AUDIO: audio calls capture the microphone (a runtime permission —

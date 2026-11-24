@@ -1,0 +1,92 @@
+# Deploys P2PRC's web client to GitHub Pages, at its custom domain
+# https://p2prc.org: the site at the root, as the release carries it.
+#
+# The site is not built here. It is the `P2PRC-<version>-web.zip` asset of a
+# GitHub release, made by tools/ci/package_web.sh (a Bazel `-c opt` build of
+# //applications/p2prc_web, stamped with the release's version) in the Build
+# workflow's alpha job, which attaches it to the draft release. Compiled
+# output never goes into git. As the Playground's pages.yml.
+#
+# On GitHub's own Ubuntu runner, with curl, python3, unzip and tar alone:
+# the asset comes from the release's public download URL (no gh), and the
+# Pages artifact is made here, the plain tar upload-pages-artifact would
+# make, with a CNAME file naming the domain beside index.html.
+#
+# Runs when a release is published (alpha attaches the asset to the draft
+# before), or by hand for any release that carries one:
+#   gh workflow run pages.yml [-f tag=<tag>]     (no tag: the latest release)
+#
+# Settings this needs: Pages' source is "GitHub Actions", its custom domain
+# p2prc.org (Settings > Pages; a workflow's deployment takes the domain from
+# there, the CNAME file in the site saying the same), the domain's DNS
+# pointing at GitHub Pages, and the github-pages environment letting tags
+# deploy (Settings > Environments > github-pages: add a tag rule such as
+# `v*` beside `main`): a release's run is on its tag, which the
+# environment's default rule refuses.
+name: Deploy Pages
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release whose P2PRC-<version>-web.zip to deploy (empty for the latest release)
+        required: false
+        default: ""
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+# One deployment at a time; a newer one waits for the one in progress.
+concurrency:
+  group: pages
+jobs:
+  deploy:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # In the job's temporary folder.
+      - name: Download the release's web client
+        env:
+          # The published release's tag, or the input; none means the
+          # latest release (asked of GitHub's API, its tag naming the asset).
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$TAG" ]; then
+            TAG="$(curl -fsSL --retry 3 -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/latest" |
+              python3 -I -c 'import json, sys; print(json.load(sys.stdin)["tag_name"])')"
+          fi
+          asset="P2PRC-${TAG#v}-web.zip"
+          cd "$RUNNER_TEMP"
+          curl -fsSL --retry 3 -o web.zip "https://github.com/$GITHUB_REPOSITORY/releases/download/$TAG/$asset"
+          mkdir site
+          unzip -q web.zip -d site
+          # package_web.sh's layout: the client's index.html at the top.
+          test -f site/index.html
+          # The custom domain.
+          echo p2prc.org > site/CNAME
+          echo "Deploying $asset of $TAG to p2prc.org"
+      # What upload-pages-artifact makes: the site as one plain tar,
+      # artifact.tar, in an artifact named github-pages, which deploy-pages
+      # takes. On a Mac (run by hand there), COPYFILE_DISABLE and
+      # --no-mac-metadata keep its extended attributes (`._` files) out.
+      - name: Archive the site
+        run: |
+          if tar --version 2> /dev/null | grep -q GNU; then
+            tar -cf "$RUNNER_TEMP/artifact.tar" -C "$RUNNER_TEMP/site" --exclude=.git --exclude=.github .
+          else
+            COPYFILE_DISABLE=1 tar --no-mac-metadata -cf "$RUNNER_TEMP/artifact.tar" \
+              -C "$RUNNER_TEMP/site" --exclude=.git --exclude=.github .
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: github-pages
+          path: ${{ runner.temp }}/artifact.tar
+          retention-days: 1
+          if-no-files-found: error
+      - id: deployment
+        uses: actions/deploy-pages@v4

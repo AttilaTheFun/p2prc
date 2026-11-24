@@ -55,7 +55,7 @@ local_provisioning_profile(
 )
 
 # CI's device build (--config=ci_device: signed ad hoc), which CI's signer
-# signs again with the bundle id's own profile (tools/ci/sign_from_ci.sh):
+# signs again with the bundle id's own profile (build_tools' `sign apple`):
 # a placeholder profile, so no profile has to be on the machine that builds.
 config_setting(
     name = "ci_device",
