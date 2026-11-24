@@ -1,0 +1,410 @@
+"""Convo — end-to-end encrypted messaging with durable, consistent history (the Convo Protocol).
+
+The P2PRC apps (iOS, macOS, web, Android) on Isomer, which comes from the
+project's registry by version (.bazelrc lists it before the BCR), and its Swift
+through third_party/swift_packages' Package.swift by the release's tag, as
+AttilaTheFun/playground takes it. Every dependency here is public.
+
+    bazel build //applications/p2prc_web //applications/p2prc_android:p2prc_android_apk
+    bazel build //applications/p2prc_ios //applications/p2prc_macos   # on a Mac
+"""
+
+module(
+    name = "convo",
+    version = "0.1.0",
+)
+
+# --- isomer: SwiftUI compiled to wasm and Android, so the same client code
+# --- runs in the browser and on Android while the native apps are shells.
+bazel_dep(name = "isomer", version = "0.61.1")
+
+# Android's rules and Isomer's Android macros (`@isomer_android//:defs.bzl`,
+# isomer's docs/platform_modules.md).
+bazel_dep(name = "isomer_android", version = "0.61.1")
+
+# No isomer_android_maven: the Android app has AndroidX of its own (CameraX),
+# so Isomer's AndroidX flags point at this module's own set
+# (//third_party:androidx_for_isomer, .bazelrc; isomer's docs/android_maven.md).
+#
+# No isomer_apple either: the Apple apps are rules_apple's ios_application and
+# macos_application over @isomer//apple/libraries/swift_ui, as the
+# Playground's are; rules_apple is the preset Isomer is tested with (below).
+
+# --- What isomer needs from its consumer -------------------------------
+
+# rules_swift: isomer's patched version from the project's registry.
+bazel_dep(name = "rules_swift", version = "4.3.0.isomer.2")
+
+# --- Toolchains (tags are read from the root module) --------------------------
+
+# The swift.org host toolchain + Isomer's wasm/Android Swift SDKs, whose
+# Foundation is Isomer's: every `import Foundation` built for the web or
+# Android is the SDK's, with no dependency declared.
+swift = use_extension("@rules_swift//swift:extensions.bzl", "swift")
+swift.toolchain(
+    name = "swift_toolchain",
+    swift_version = "6.4.2",
+)
+swift.wasm_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_wasm.artifactbundle.tar.gz",
+    sha256 = "9bd7e1808fc9fb5027b89becbf2559946e19e9a365aac6876eedf834cceb68cf",
+)
+swift.android_sdk(
+    url = "https://github.com/AttilaTheFun/isomer_hermetic_toolchains/releases/download/isomer-6.4.2.2/swift-6.4.2-RELEASE_android.artifactbundle.tar.gz",
+    sha256 = "19094e58e92669d26a4ce31e5a05f85963eeb5af9cafa35475f2a55e4d69451c",
+)
+use_repo(
+    swift,
+    "swift_toolchain",
+    "swift_toolchain_ubuntu24.04-aarch64",
+    "swift_toolchain_xcode",
+)
+
+register_toolchains(
+    "@swift_toolchain//:cc_toolchain_wasm32_xcode",
+    "@swift_toolchain//:swift_toolchain_wasm32_xcode",
+    "@swift_toolchain//:swift_toolchain_android_aarch64_xcode",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_xcode",
+)
+
+register_toolchains(
+    "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04",
+    "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04",
+    # arm64 Linux (a container on an Apple silicon Mac, a Graviton or Ampere VM).
+    "@swift_toolchain//:swift_toolchain_exec_ubuntu24.04-aarch64",
+    "@swift_toolchain//:cc_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_wasm32_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_android_aarch64_ubuntu24.04-aarch64",
+    "@swift_toolchain//:swift_toolchain_android_x86_64_ubuntu24.04-aarch64",
+)
+
+# rules_applecross, which the registry's rules_apple preset asks for: the
+# Apple apps' bundling toolchains, as in Isomer's examples and the
+# Playground. A Mac builds with its own Xcode (local_xcode); the Linux side
+# (--config=apple_on_linux, with an SDK archive a builder's .bazelrc.user
+# resolves) is there for builders that have one.
+bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+
+apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
+apple_cross_toolchain.swift(
+    name = "applecross_swift",
+    platform_sha256 = {
+        "ubuntu24.04": "69f7b2b4dbce6090b6c92194b71149a057e16269093b5a9dded38afc4a05094e",
+        "ubuntu24.04-aarch64": "21eacfe571194717d269cc1e0030533bbee6131dfde82cd4f9cfbc2512e354a9",
+        "xcode": "8fd03185b98fe27f54a54631c2449decf75d5b466ce8e34abbd414141063c6aa",
+    },
+    swift_version = "6.4.0",
+)
+apple_cross_toolchain.configure(
+    name = "apple_cross_toolchain",
+    apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.0.tar.gz"],
+    local_xcode = True,
+    swift_tools = {
+        "aarch64": "@applecross_swift_ubuntu24.04-aarch64//:tools",
+        "x86_64": "@applecross_swift_ubuntu24.04//:tools",
+    },
+    swift_tools_macos = "@applecross_swift_xcode//:tools",
+    xcode_version = "27.0",
+)
+use_repo(apple_cross_toolchain, "apple_cross_toolchain")
+
+register_toolchains(
+    "@rules_applecross//toolchain:apple_bundling_on_linux",
+    "@rules_applecross//toolchain:apple_bundling_on_macos",
+)
+
+# The hermetic Android NDK/SDK (the extension requires root-module tags even
+# for Apple-only builds; the licenses are accepted in .bazelrc). The project
+# registry's 0.5.0.isomer.2: Linux hosts of any CPU.
+bazel_dep(name = "hermetic_android_toolchains", version = "0.5.0.isomer.2")
+
+android = use_extension("@hermetic_android_toolchains//:extensions.bzl", "android", dev_dependency = True)
+android.sdk(
+    build_tools_version = "35.0.0",
+    version = "35",
+)
+android.ndk(
+    api_level = 28,
+    version = "r30",
+)
+use_repo(android, "androidndk", "androidsdk")
+
+bazel_dep(name = "rules_android", version = "0.7.3")
+
+# Point rules_android at the hermetic @androidsdk (instead of $ANDROID_HOME).
+rules_android_sdk = use_extension(
+    "@rules_android//rules/android_sdk_repository:rule.bzl",
+    "android_sdk_repository_extension",
+    dev_dependency = True,
+)
+override_repo(rules_android_sdk, "androidsdk")
+
+register_toolchains(
+    "@androidndk//:all",
+    "@androidsdk//:all",
+    dev_dependency = True,
+)
+
+# --- Signing -------------------------------------------------------------------
+# The builder's own Apple team, from CONVO_TEAM_ID in a .bazelrc.user that
+# isn't checked in (tools/signing/extension.bzl). It turns on the shared
+# GitHub sign-in and UpdateKit's app group in the team's own builds.
+signing = use_extension("//tools/signing:extension.bzl", "signing")
+use_repo(signing, "convo_signing")
+
+# --- Rules -------------------------------------------------------------------
+
+bazel_dep(name = "bazel_skylib", version = "1.9.0")
+bazel_dep(name = "platforms", version = "1.1.0")
+
+# rules_apple and apple_support at Isomer's versions: the registry's preset
+# rules_apple 5.3.1.applecross.6 (rules_applecross's patches), named
+# build_bazel_rules_apple as Isomer names it, and the BCR's apple_support.
+bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "apple_support", version = "2.11.0")
+
+# Declared after apple_support so apple_support's apple cc toolchain keeps
+# resolution priority over rules_cc's local_config_cc darwin toolchain.
+bazel_dep(name = "rules_cc", version = "0.2.17")
+bazel_dep(name = "rules_shell", version = "0.8.0")
+
+# Not a dev_dependency: the iOS app's device signing goes through
+# rules_xcodeproj's Xcode-managed provisioning profile target.
+bazel_dep(name = "rules_xcodeproj", version = "4.1.0")
+
+# Forward-pin: the transitively-resolved rules_go is too old for Bazel 9.
+bazel_dep(name = "rules_go", version = "0.61.1")
+
+# Hermetic Go >= 1.24 for gazelle's repo tooling (rules_android's `ak` Go
+# tools request it; the host Go is not consulted).
+go_sdk = use_extension("@rules_go//go:extensions.bzl", "go_sdk")
+go_sdk.download(version = "1.24.12")
+
+bazel_dep(name = "rules_java", version = "9.3.0")
+bazel_dep(name = "rules_kotlin", version = "2.2.2")
+bazel_dep(name = "rules_python", version = "2.0.2")
+
+# --- Swift packages --------------------------------------------------------------
+#
+# rules_swift_package_manager: one graph (//third_party/swift_packages) for
+# this module's packages and Isomer's (Package.swift lists isomer by the
+# release's tag): the protocol (this repository's protocol/), Communication
+# (WebRTC for the Apple clients), AgentUI, ShakeKit, UpdateKit, build_tools
+# and swift-argument-parser. rspm generates one @swiftpkg_<name> repo each.
+bazel_dep(name = "rules_swift_package_manager", version = "1.26.0")
+
+swift_deps = use_extension("@rules_swift_package_manager//:extensions.bzl", "swift_deps")
+swift_deps.from_package(
+    resolved = "//third_party/swift_packages:Package.resolved",
+    swift = "//third_party/swift_packages:Package.swift",
+)
+
+# agent_ui's targets import SwiftUI. On Apple that is the system's; on the
+# web and Android isomer's `SwiftUI` module, reached through one label that
+# resolves per platform (and to nothing on Apple). No package needs a
+# Foundation dependency declared (since isomer 0.56): on wasm and Android
+# `import Foundation` is the Swift SDK's, Isomer's.
+swift_deps.configure_package(
+    name = "agent_ui",
+    target_deps = {
+        "InboxUI": ["@isomer//:swift_ui"],
+        "MessagesCore": ["@isomer//:swift_ui"],
+        "MessagesUI": ["@isomer//:swift_ui"],
+        "NavigationUI": ["@isomer//:swift_ui"],
+    },
+)
+
+# The protocol's ConvoFoundation imports FoundationEssentials alone on WASI,
+# for the node's Worker on swift.org's wasm SDK (no ICU). The apps' wasm
+# build is on Isomer's SDK, whose Foundation is the one to import (it is
+# FoundationEssentials and Isomer's additions): this target's
+# CONVO_ISOMER_FOUNDATION define, which rules_swift passes on to the
+# targets that depend on it, says so (third_party/convo_foundation).
+swift_deps.configure_package(
+    name = "protocol",
+    target_deps = {
+        "ConvoFoundation": ["@@//third_party/convo_foundation:isomer_foundation"],
+    },
+)
+
+# swift-crypto reaches wasm (and Android) through //third_party/swift_crypto,
+# whose BUILD carries the WASI settings from Apple's manifest (no pthreads,
+# CRYPTO_IN_SWIFTPM_FORCE_BUILD_API): Isomer doesn't build the generated
+# package for wasm. The generated repo is swapped for it.
+swift_crypto = use_extension("//third_party/swift_crypto:extensions.bzl", "swift_crypto")
+use_repo(swift_crypto, "swift_crypto")
+
+override_repo(swift_deps, swiftpkg_swift_crypto = "swift_crypto")
+
+use_repo(
+    swift_deps,
+    "swift_package",
+    "swiftpkg_agent_ui",
+    "swiftpkg_build_tools",
+    "swiftpkg_communication",
+    "swiftpkg_protocol",
+    "swiftpkg_shake_kit",
+    "swiftpkg_swift_argument_parser",
+    "swiftpkg_update_kit",
+)
+
+# The generated package repositories see rules_swift_package_manager's
+# repositories; the target_deps above (and isomer's own) name @isomer.
+inject_repo(swift_deps, "isomer")
+
+# --- Android Maven ---------------------------------------------------------------
+#
+# The app's own Maven (isomer's docs/android_maven.md, "An app with AndroidX of
+# its own"): Isomer's AndroidX set at Isomer's versions, plus what the app's
+# Kotlin uses, in one repository, so one copy of AndroidX reaches the APK.
+# //third_party:androidx_for_isomer exports what Isomer's set exports, and
+# .bazelrc points Isomer's flags at it and at the Compose compiler here.
+#   REPIN=1 bazel run @p2prc_maven//:pin
+bazel_dep(name = "rules_jvm_external", version = "7.1")
+
+maven = use_extension("@rules_jvm_external//:extensions.bzl", "maven")
+maven.install(
+    name = "p2prc_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    artifacts = [
+        # Isomer's AndroidX (isomer_android_maven's list at 0.61.1).
+        "androidx.collection:collection:1.4.0",
+        # The real ListenableFuture (androidx pulls the empty
+        # 9999.0-empty-to-avoid-conflict-with-guava marker by default).
+        "com.google.guava:listenablefuture:1.0",
+        "androidx.lifecycle:lifecycle-common:2.8.7",
+        "androidx.lifecycle:lifecycle-runtime:2.8.7",
+        "androidx.activity:activity-compose:1.9.3",
+        "androidx.compose.foundation:foundation:1.7.8",
+        "androidx.fragment:fragment:1.8.5",
+        "androidx.compose.material3:material3:1.3.2",
+        "androidx.compose.runtime:runtime:1.7.8",
+        "androidx.compose.ui:ui:1.7.8",
+        "androidx.browser:browser:1.8.0",
+        "androidx.profileinstaller:profileinstaller:1.4.1",
+        "androidx.startup:startup-runtime:1.1.1",
+        "androidx.tracing:tracing:1.2.0",
+        "org.jetbrains.kotlin:kotlin-stdlib:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.20",
+        "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.20",
+        "org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0",
+        # The Compose compiler, matching rules_kotlin 2.2.2's kotlinc (2.2.21).
+        "org.jetbrains.kotlin:kotlin-compose-compiler-plugin-embeddable:2.2.21",
+        # P2PRC's own: libwebrtc for the Android transport (data channels +
+        # audio calls), the same stack the Apple clients get from the
+        # Communication package. GetStream's untouched packaging of Google's
+        # org.webrtc (M125); the webrtc-sdk (livekit) build aborts in jvm.cc
+        # on first use under our runtime.
+        "io.getstream:stream-webrtc-android:1.3.10",
+        # ZXing's pure-Java encoder: the pairing QR code (the web bundles
+        # qrcode.js, the Apple apps use Core Image).
+        "com.google.zxing:core:3.5.3",
+        # CameraX for the live pairing-code scanner.
+        "androidx.camera:camera-core:1.3.4",
+        "androidx.camera:camera-camera2:1.3.4",
+        "androidx.camera:camera-lifecycle:1.3.4",
+        "androidx.camera:camera-view:1.3.4",
+    ],
+    lock_file = "//:p2prc_maven_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+    # Compose's androidx graph mixes exact-pin ranges with old floors;
+    # resolve to the pinned/highest versions instead of failing.
+    version_conflict_policy = "pinned",
+)
+
+# rules_android's own Maven (r8, bundletool, desugaring) and its tools'
+# workers, pinned with isomer's lock files (docs/android_maven.md,
+# "rules_android's own Maven").
+maven.install(
+    name = "rules_android_maven",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "@isomer//:rules_android_maven_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+maven.install(
+    name = "android_ide_common_30_1_3",
+    aar_import_bzl_label = "@rules_android//rules:rules.bzl",
+    known_contributing_modules = ["rules_android"],
+    lock_file = "@isomer//:android_ide_common_30_1_3_install.json",
+    repositories = [
+        "https://maven.google.com",
+        "https://repo1.maven.org/maven2",
+    ],
+    use_starlark_android_rules = True,
+)
+maven.install(
+    name = "bazel_worker_maven",
+    known_contributing_modules = ["bazel_worker_java"],
+    lock_file = "@isomer//:bazel_worker_maven_install.json",
+)
+use_repo(maven, "p2prc_maven")
+
+# isomer's hermetic Android dev-tool bundle: the emulator + system image
+# `bazel run //applications/p2prc_android` boots when no device is connected,
+# and the standalone build tools (CI's apksigner and aapt2, //tools/ci_tools).
+android_tools = use_extension("@isomer//tools/android:extensions.bzl", "android_tools")
+use_repo(
+    android_tools,
+    "android_build_tools",
+    "android_emulator",
+    "android_platform_jar",
+    "android_platform_tools",
+    "android_system_image",
+    "hermetic_jdk",
+    "kotlin_compiler",
+)
+
+# --- CI's signing tools (//tools/ci_tools) ------------------------------------
+#
+# Pinned by SHA-256 for each Linux architecture: rcodesign (apple-platform-rs),
+# which build_tools' `sign apple` signs and notarizes the Apple apps with, and
+# rules_applecross's `dmg` (its ported tools' release) for the Mac app's disk
+# image. Linux binaries alone: signing runs in CI's Linux container.
+# `sign android`'s java: rules_java's remote JDKs, for either Linux
+# architecture.
+java_toolchains = use_extension("@rules_java//java:extensions.bzl", "toolchains")
+use_repo(java_toolchains, "remotejdk17_linux", "remotejdk17_linux_aarch64")
+
+signing_tool_archive = use_repo_rule("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
+
+signing_tool_archive(
+    name = "rcodesign_linux_aarch64",
+    build_file_content = 'exports_files(["rcodesign"])',
+    sha256 = "4af92c87ddf52f5f2d1258a3b4e56c7dcb8f1b2468df744976c5f139e031961f",
+    strip_prefix = "apple-codesign-0.29.0-aarch64-unknown-linux-musl",
+    url = "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-aarch64-unknown-linux-musl.tar.gz",
+)
+
+signing_tool_archive(
+    name = "rcodesign_linux_x86_64",
+    build_file_content = 'exports_files(["rcodesign"])',
+    sha256 = "dbe85cedd8ee4217b64e9a0e4c2aef92ab8bcaaa41f20bde99781ff02e600002",
+    strip_prefix = "apple-codesign-0.29.0-x86_64-unknown-linux-musl",
+    url = "https://github.com/indygreg/apple-platform-rs/releases/download/apple-codesign%2F0.29.0/apple-codesign-0.29.0-x86_64-unknown-linux-musl.tar.gz",
+)
+
+signing_tool_archive(
+    name = "dmg_linux_aarch64",
+    build_file_content = 'exports_files(["bin/dmg"])',
+    sha256 = "e902f3beb581aee24796084d2e2284241e35540a95230e01f5c1899ee61c4d52",
+    url = "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/ported-tools-0.0.92/dmg-linux-aarch64.tar.zst",
+)
+
+signing_tool_archive(
+    name = "dmg_linux_x86_64",
+    build_file_content = 'exports_files(["bin/dmg"])',
+    sha256 = "67ee77b978b2b7b0875c9201bb9b09e5a5f716a49450bc53c804a7e2db4866b9",
+    url = "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/ported-tools-0.0.92/dmg-linux-x86_64.tar.zst",
+)

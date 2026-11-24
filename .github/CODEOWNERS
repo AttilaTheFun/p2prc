@@ -1,0 +1,5 @@
+# Only what needs the owner himself: CI and its workflows, and signing.
+# Everything else is reviewed without asking him.
+/.github/ @AttilaTheFun
+/tools/ci_tools/ @AttilaTheFun
+/tools/signing/ @AttilaTheFun

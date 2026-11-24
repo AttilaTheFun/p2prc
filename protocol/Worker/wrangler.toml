@@ -1,0 +1,32 @@
+# A Convo node on Cloudflare's free plan (README.md here).
+name = "convo-node"
+main = "src/worker.js"
+compatibility_date = "2026-11-01"
+# The workers.dev URL stays on beside any custom domain (--domain), which
+# would otherwise turn it off: clients may know a node by either.
+workers_dev = true
+
+[[durable_objects.bindings]]
+name = "CONVO_NODE"
+class_name = "ConvoNode"
+
+# SQLite-backed, the kind the free plan has.
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["ConvoNode"]
+
+[[rules]]
+type = "CompiledWasm"
+globs = ["**/*.wasm"]
+fallthrough = true
+
+[vars]
+# Nodes to ask to witness this node's log (comma list); at least two others.
+WITNESSES = ""
+# Nodes to learn the directory from (comma list).
+SEEDS = ""
+# Optional: NODE_ID, SITE, OPERATOR_PK (hex), PUBLIC_URL (default: the
+# workers.dev URL of the first request), COMMIT_INTERVAL_MS.
+# TURN: `wrangler secret put CLOUDFLARE_TURN_KEY_ID` and
+# `wrangler secret put CLOUDFLARE_TURN_API_TOKEN` (Realtime > TURN in the
+# dashboard). Without them /ice answers Cloudflare's STUN only.

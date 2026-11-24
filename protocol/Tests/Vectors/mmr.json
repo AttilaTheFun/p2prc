@@ -1,0 +1,93 @@
+{
+  "leaves" : [
+    "e570ed78ce03b9f3faf51bae5662ea1874a2a27e45998b31bf2a29a3aa55da57",
+    "7a5bfd0e7cad328b85e264216862cf07d205082efb1144a50a590c8a9917b307",
+    "5c1a6c8b95b1c6e501b97d6cdb1ed860cf023e6ae1422dc39b5de21f492de92c",
+    "f17effa8e89a3fc124e3ccf316d6c35e92382c27b1dc056805165653526de880",
+    "87996b94d1a09eafcc60650055a4524c4466a8fe5a6a753dab1b648a3035742a",
+    "6d2f66bb97d4ab1bd2644e82afc1c9c38781eae0b2b91ee653c23707975f383b",
+    "127743fd1036ab28d4915b55e2af151b48409c1f4290d5fb8a11e94864954220",
+    "b6a87d2993f2a19b859b32af80aa9510d0e0650a099e09598f7fe9e5e6b6d860"
+  ],
+  "negative" : {
+    "peak_index" : 0,
+    "verifies" : true
+  },
+  "peaks" : {
+    "after_1" : [
+      "e570ed78ce03b9f3faf51bae5662ea1874a2a27e45998b31bf2a29a3aa55da57"
+    ],
+    "after_2" : [
+      "834355558179d3923936f1ebe6af9dc7c891ca4fca73cd7d4b16f6b6a63859e6"
+    ],
+    "after_3" : [
+      "834355558179d3923936f1ebe6af9dc7c891ca4fca73cd7d4b16f6b6a63859e6",
+      "5c1a6c8b95b1c6e501b97d6cdb1ed860cf023e6ae1422dc39b5de21f492de92c"
+    ],
+    "after_7" : [
+      "5266b483133e92e822e0adbbf2fde6add1f0b45ce27f66c43242d7f973eda297",
+      "2a13311d7b793026c905303d810d92e29a9b4a7eff32b5eeffd2b7d50bed95e9",
+      "127743fd1036ab28d4915b55e2af151b48409c1f4290d5fb8a11e94864954220"
+    ],
+    "after_8" : [
+      "a3fe61d452efcd46a3fb2634d6230066ac8c3759b0f7f849dcc2cc561c9e3869"
+    ]
+  },
+  "proof_2_of_7" : {
+    "leaf_index" : 2,
+    "peak_index" : 0,
+    "siblings" : [
+      {
+        "sibling" : "f17effa8e89a3fc124e3ccf316d6c35e92382c27b1dc056805165653526de880",
+        "side" : 1
+      },
+      {
+        "sibling" : "834355558179d3923936f1ebe6af9dc7c891ca4fca73cd7d4b16f6b6a63859e6",
+        "side" : 0
+      }
+    ],
+    "size" : 7,
+    "verifies" : true
+  },
+  "proof_2_of_8" : {
+    "leaf_index" : 2,
+    "peak_index" : 0,
+    "siblings" : [
+      {
+        "sibling" : "f17effa8e89a3fc124e3ccf316d6c35e92382c27b1dc056805165653526de880",
+        "side" : 1
+      },
+      {
+        "sibling" : "834355558179d3923936f1ebe6af9dc7c891ca4fca73cd7d4b16f6b6a63859e6",
+        "side" : 0
+      },
+      {
+        "sibling" : "9bea27566c640d6e444c3f674a259193c7b377cbdc8e5e0c523faf225d0d706a",
+        "side" : 1
+      }
+    ],
+    "size" : 8,
+    "stale_2_of_7_verifies_at_8" : false,
+    "verifies" : true
+  },
+  "proof_5_of_8" : {
+    "leaf_index" : 5,
+    "peak_index" : 0,
+    "siblings" : [
+      {
+        "sibling" : "87996b94d1a09eafcc60650055a4524c4466a8fe5a6a753dab1b648a3035742a",
+        "side" : 0
+      },
+      {
+        "sibling" : "fa9711d6c5a196b2e42c21cbd2a0badfed7127d4aeccfe3dd77dc4b2625bfd25",
+        "side" : 1
+      },
+      {
+        "sibling" : "5266b483133e92e822e0adbbf2fde6add1f0b45ce27f66c43242d7f973eda297",
+        "side" : 0
+      }
+    ],
+    "size" : 8,
+    "verifies" : true
+  }
+}

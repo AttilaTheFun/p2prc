@@ -1,0 +1,15 @@
+/bazel-*
+.DS_Store
+# The Xcode project is generated: bazel run //:xcodeproj
+*.xcodeproj
+.idea/
+
+# Signing keys must never be committed
+signing-key
+*.signing-key
+
+# SwiftPM resolution artifacts (Package.resolved is kept, checkouts are not)
+.build/
+
+.bazelrc.user
+MODULE.bazel.lock

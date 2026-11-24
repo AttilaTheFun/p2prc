@@ -1,0 +1,2 @@
+# SwiftPM checkouts from resolving third_party/swift_packages; their BUILD files are not ours.
+third_party/swift_packages/.build

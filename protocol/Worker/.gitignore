@@ -1,0 +1,4 @@
+src/convo_node_worker.wasm
+.wrangler/
+node_modules/
+.build/

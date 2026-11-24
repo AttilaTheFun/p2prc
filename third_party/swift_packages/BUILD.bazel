@@ -1,0 +1,8 @@
+# rules_swift_package_manager reads these directly to resolve the SwiftPM
+# graph Convo's native clients consume (currently Communication + its WebRTC
+# backend). Regenerate the resolution with:
+#   cd third_party/swift_packages && swift package resolve
+exports_files([
+    "Package.swift",
+    "Package.resolved",
+])

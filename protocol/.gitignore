@@ -1,0 +1,7 @@
+.build/
+.swiftpm/
+*.xcodeproj/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcuserdata/
+.DS_Store
+bazel-*
+Worker/.build/

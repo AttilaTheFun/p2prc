@@ -1,0 +1,52 @@
+{
+  "canonical_order" : [
+    "e0bfbc4235fee12a7448b984ba045ce3043b97d743ab189012d65b843d6446c2",
+    "26a2bde060069d3e37440d5774a0c07947f098e2694023a47f9190e070dd3eb9",
+    "7f02dc08a9d11c4eb90634c9988c7a6727d89e22f307a46b1153999c6f5925ed",
+    "aba0c07b8e827696b846aa5c02d9bd663c9a071f48012c527ae269282bbebe48"
+  ],
+  "content_root" : "ffc3e921d55a331278714d7de04acd80a4cf4325b7abab7e397b414b58ea3e22",
+  "head" : "aba0c07b8e827696b846aa5c02d9bd663c9a071f48012c527ae269282bbebe48",
+  "proofs" : [
+    [
+      {
+        "sibling" : "34edb9b88e8a06806c617111e80857a47e1d71789e1ef7ceaf34d45bc0540f0f",
+        "side" : 1
+      },
+      {
+        "sibling" : "9baa92e4711dcd010bef9e89f53d346759a166a3cdcb72eb4c75660b37adc823",
+        "side" : 1
+      }
+    ],
+    [
+      {
+        "sibling" : "730a7f3d8a4c3638599f417679156dc335d14fa5cf4108f7c8b2742b94ef980b",
+        "side" : 0
+      },
+      {
+        "sibling" : "9baa92e4711dcd010bef9e89f53d346759a166a3cdcb72eb4c75660b37adc823",
+        "side" : 1
+      }
+    ],
+    [
+      {
+        "sibling" : "bbe95be2d6f852c070d896b84c3a56d08f36f4ad270ad42196419240860a9932",
+        "side" : 1
+      },
+      {
+        "sibling" : "cf532485917661e7915f6e40ca2a2f734078bf36150d017a978e215da8999427",
+        "side" : 0
+      }
+    ],
+    [
+      {
+        "sibling" : "8479f393008c00bb562fc6d2469336e415fad69327c0f1ba46ed7e39993791ff",
+        "side" : 0
+      },
+      {
+        "sibling" : "cf532485917661e7915f6e40ca2a2f734078bf36150d017a978e215da8999427",
+        "side" : 0
+      }
+    ]
+  ]
+}

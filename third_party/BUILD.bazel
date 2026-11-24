@@ -1,0 +1,35 @@
+load("@rules_android//rules:rules.bzl", "android_library")
+
+# Isomer's AndroidX, from the app's own Maven (@p2prc_maven, MODULE.bazel):
+# what isomer_android_maven's set exports, by name, so that one copy of
+# AndroidX reaches the APK (isomer's docs/android_maven.md, "An app with
+# AndroidX of its own"). .bazelrc points @isomer//android/maven:androidx at
+# it. listenablefuture is pinned at 1.0 (the real class), as Isomer's is: the
+# graph has no Guava.
+android_library(
+    name = "androidx_for_isomer",
+    exports = [
+        "@p2prc_maven//:androidx_activity_activity_compose",
+        "@p2prc_maven//:androidx_browser_browser",
+        "@p2prc_maven//:androidx_compose_foundation_foundation",
+        "@p2prc_maven//:androidx_compose_material_material_icons_core",
+        "@p2prc_maven//:androidx_compose_material3_material3",
+        "@p2prc_maven//:androidx_compose_runtime_runtime",
+        "@p2prc_maven//:androidx_compose_ui_ui",
+        "@p2prc_maven//:androidx_concurrent_concurrent_futures",
+        "@p2prc_maven//:androidx_fragment_fragment",
+        "@p2prc_maven//:androidx_lifecycle_lifecycle_common",
+        "@p2prc_maven//:androidx_profileinstaller_profileinstaller",
+        "@p2prc_maven//:com_google_guava_listenablefuture",
+        "@p2prc_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_android",
+        "@p2prc_maven//:org_jetbrains_kotlinx_kotlinx_coroutines_core",
+    ],
+    visibility = ["//visibility:public"],
+)
+
+# The Compose compiler plugin for rules_kotlin 2.2.2's kotlinc (2.2.21).
+alias(
+    name = "compose_compiler",
+    actual = "@p2prc_maven//:org_jetbrains_kotlin_kotlin_compose_compiler_plugin_embeddable",
+    visibility = ["//visibility:public"],
+)

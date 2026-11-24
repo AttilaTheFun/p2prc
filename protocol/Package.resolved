@@ -1,0 +1,41 @@
+{
+  "originHash" : "691e1edf72de9a1aad3a3c63bc93ca21cb16772901760122954c831b5f339a02",
+  "pins" : [
+    {
+      "identity" : "communication",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AttilaTheFun/communication.git",
+      "state" : {
+        "revision" : "029de5185bf1b9dbcbac59ea06d3484a305c3505"
+      }
+    },
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "d9a5b37470adc940d22c3bcd5ca6953a516b727f",
+        "version" : "1.7.2"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
+        "version" : "3.15.1"
+      }
+    },
+    {
+      "identity" : "webrtc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stasel/WebRTC",
+      "state" : {
+        "revision" : "1d04692697cb642bfebf6ad2dd99fe52649c3d6d",
+        "version" : "152.0.0"
+      }
+    }
+  ],
+  "version" : 3
+}

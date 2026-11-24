@@ -1,0 +1,78 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer_android//:defs.bzl", "isomer_android_app")
+
+# The Android client: the same shared Swift the other clients run,
+# cross-compiled with the hermetic NDK toolchain and rendered by isomer's
+# Jetpack Compose renderer. The `isomer_android_app` macro generates the
+# MainActivity + manifest, links the Swift into a JNI .so with generated Kotlin
+# bindings, and assembles/signs the APK with hermetic tools — no Android
+# Studio, no host JDK.
+#
+# `bazel run //applications/p2prc_android` installs and launches it, booting
+# the hermetic emulator first if no device is connected.
+
+# The shared SwiftUI application as a plain library; the macro's swift_ffi
+# bridge target links it into the JNI .so and generates the Kotlin bindings.
+swift_library(
+    name = "app_swift",
+    srcs = [
+        "ConvoAndroidApp.swift",
+    ],
+    # Whole-archive: the only reference to the app's synthesized @main is the
+    # nativeStart trampoline in the SwiftUI archive, which links after it.
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "ConvoAndroid",
+    tags = ["manual"],  # only meaningful through the android transition
+    deps = [
+        "//libraries/convo_app",
+        "//libraries/convo_services",
+        "//libraries/convo_ui",
+        "@isomer//swift_ffi/swift_ffi",
+        "@isomer//android/libraries/swift_ui",
+        "@isomer//android/libraries/swift_ui:isomer",
+    ],
+)
+
+isomer_android_app(
+    name = "p2prc_android",
+    # Convo's icon at the launcher's largest density; Android scales it.
+    icon = "//artwork/app_icon:Convo-192.png",
+    default_renderer = "jetpackCompose",
+    label = "P2PRC",
+    package = "com.loganshire.p2prc",
+    # Kept in step with the iOS and macOS Info.plist versions.
+    version_name = "0.35.0",
+    version_code = 17,
+    # ACCESS_NETWORK_STATE: libwebrtc's NetworkMonitor queries connectivity on
+    # its network thread; without it the SecurityException aborts the process.
+    # RECORD_AUDIO: audio calls capture the microphone (a runtime permission —
+    # granted in the UI, or `adb shell pm grant` on the emulator).
+    # MODIFY_AUDIO_SETTINGS: libwebrtc's audio device module.
+    permissions = [
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        # CAMERA: the live pairing-code scanner (a runtime permission).
+        "android.permission.CAMERA",
+    ],
+    # The app's dependency injection: the Kotlin ConvoHost — real libwebrtc
+    # transport and calls, persistence, HTTP, share sheet; see AppServices.kt
+    # for what remains stubbed (QR, serving) — installed into the swift_ffi
+    # dependency dictionary before start.
+    services_deps = [
+        "@p2prc_maven//:io_getstream_stream_webrtc_android",
+        "@p2prc_maven//:com_google_zxing_core",
+        "@p2prc_maven//:androidx_camera_camera_core",
+        "@p2prc_maven//:androidx_camera_camera_camera2",
+        "@p2prc_maven//:androidx_camera_camera_lifecycle",
+        "@p2prc_maven//:androidx_camera_camera_view",
+    ],
+    services_installer = "dev.isomer.runtime.ConvoAndroidServices.install(this)",
+    services_kt = "AppServices.kt",
+    swift_library = ":app_swift",
+    # Mesh signaling mailboxes are plain http:// LAN peers by design (no CA
+    # on a LAN peer); targetSdk 34 blocks cleartext without this.
+    uses_cleartext_traffic = True,
+    visibility = ["//visibility:public"],
+)

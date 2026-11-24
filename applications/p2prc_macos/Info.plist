@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>CFBundleDevelopmentRegion</key><string>en</string>
+  <key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
+  <key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+  <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
+  <key>CFBundleName</key><string>P2PRC</string>
+  <!-- Seed signaling servers (docs/architecture.md §4): configuration the
+       client health-checks like any other server, never trusted outright. -->
+  <key>ConvoSeeds</key>
+  <array>
+    <string>https://node-1.p2prc.org</string>
+		<string>https://node-2.p2prc.org</string>
+		<string>https://node-3.p2prc.org</string>
+  </array>
+  <key>CFBundleDisplayName</key><string>P2PRC</string>
+  <key>CFBundlePackageType</key><string>APPL</string>
+  <key>CFBundleShortVersionString</key><string>0.35.0</string>
+  <key>CFBundleVersion</key><string>17</string>
+  <key>NSHighResolutionCapable</key><true/>
+  <!-- The bootstrapper serves the app bundle over plain HTTP: a browser that
+       has nothing yet cannot verify a certificate, and the bundle carries its
+       own Ed25519 signature, so TLS would add a dependency without adding
+       trust. -->
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Talk on a call with someone you've paired with.</string>
+  <key>NSCameraUsageDescription</key>
+  <string>Be seen on a video call with someone you've paired with.</string>
+  <key>NSAppTransportSecurity</key>
+  <dict><key>NSAllowsArbitraryLoads</key><true/></dict>
+</dict>
+</plist>

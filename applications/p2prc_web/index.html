@@ -1,0 +1,621 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <!-- The page ground's colour (Safari tints the status-bar area with it;
+       the bars are transparent, so it must match the ground, not a bar). -->
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)">
+  <!-- Added to the Home Screen, the page runs without Safari's chrome (no
+       URL bar riding up with the keyboard); the status bar area is ours. -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="P2PRC">
+  <link rel="manifest" href="./assets/manifest.webmanifest">
+  <link rel="icon" type="image/png" href="./assets/Convo-1024.png">
+  <link rel="apple-touch-icon" href="./assets/Convo-1024.png">
+  <!-- Seed signaling servers (docs/architecture.md §4): configuration the
+       client health-checks like any other server, never trusted outright. -->
+  <meta name="convo-seeds" content="https://node-1.p2prc.org,https://node-2.p2prc.org,https://node-3.p2prc.org">
+  <title>Convo</title>
+  <style>
+    /* The system font everywhere, form controls included: browsers default
+       a textarea to a serif/monospace face unless told otherwise, and the
+       renderer's inputs inherit from here. */
+    html, body { font-family: -apple-system, BlinkMacSystemFont, system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+    input, textarea, button, [contenteditable] { font-family: inherit; font-size: inherit; }
+    html, body { margin: 0; height: 100%; height: 100dvh; background: #fff; }
+    @media (prefers-color-scheme: dark) { html, body { background: #000; } }
+    #canvas { width: 100%; height: 100%; display: block; touch-action: none; }
+    #error { font: 14px monospace; color: #b00; padding: 16px; white-space: pre-wrap; }
+    /* The QR is host-drawn; the wasm UI frames it. Centered card, sized so
+       the input/link area below stays visible on a phone. */
+    .qr { position: fixed; left: 50%; top: 46%; transform: translate(-50%, -50%);
+          z-index: 10; /* the renderer mounts its own tree after these divs */
+          background: #fff; padding: 10px; border-radius: 16px;
+          box-shadow: 0 8px 30px rgba(0,0,0,.14); }
+    .qr img { display: block; width: min(62vw, 300px); height: auto; image-rendering: pixelated; }
+    .qr:empty { display: none; }
+    /* Hidden: the UI now places the code in its own tree (qrImage); these
+       stay only as the source saveQR reads. */
+    .qr { display: none; }
+  </style>
+</head>
+<body>
+  <canvas id="canvas"></canvas>
+  <div id="invite-qr" class="qr"></div>
+  <script src="./assets/qrcode.js"></script>
+  <script src="./assets/jsqr.js"></script>
+  <script src="./assets/qr.js"></script>
+  <script type="module">
+    import { boot } from "./runtime/boot.js";
+    import { Dependencies } from "./app_bridge.js";
+
+    // The host half of the client: WebRTC, localStorage, and the URL. It moves
+    // bytes and nothing else — every frame it sends is ciphertext the wasm
+    // module produced, and no key material ever crosses this boundary.
+    let STUN = [
+      { urls: "stun:stun.l.google.com:19302" },
+    ];
+
+    let bridge = null;
+    // One connection per peer id — an opaque handle the guest chooses — so
+    // several conversations can be live at once. Each entry holds its own
+    // RTCPeerConnection, data channel, and (during a call) microphone stream.
+    const conns = new Map();
+    // Where the peer's voice comes out. One element: there is one active call
+    // at a time. Autoplay is allowed because the call always follows a user
+    // gesture (the call/accept button).
+    const remoteAudio = document.createElement("audio");
+    remoteAudio.autoplay = true;
+    document.body.appendChild(remoteAudio);
+    // A video call: the peer large, ourselves small in its corner, floating
+    // over the page (the page positions DOM over the canvas, as the QR once
+    // was). Shown while either side's video is flowing.
+    const videoPanel = document.createElement("div");
+    videoPanel.style.cssText = "position:fixed;right:16px;bottom:16px;width:320px;height:240px;display:none;"
+      + "border-radius:14px;overflow:hidden;background:#000;box-shadow:0 8px 32px rgba(0,0,0,.45);z-index:20";
+    const remoteVideo = document.createElement("video");
+    remoteVideo.autoplay = true; remoteVideo.playsInline = true;
+    remoteVideo.style.cssText = "width:100%;height:100%;object-fit:cover;background:#000";
+    const localVideo = document.createElement("video");
+    localVideo.autoplay = true; localVideo.muted = true; localVideo.playsInline = true;
+    localVideo.style.cssText = "position:absolute;right:8px;bottom:8px;width:96px;height:72px;object-fit:cover;"
+      + "border-radius:8px;background:#222";
+    videoPanel.appendChild(remoteVideo); videoPanel.appendChild(localVideo);
+    document.body.appendChild(videoPanel);
+    const showVideo = (on) => { videoPanel.style.display = on ? "block" : "none"; };
+    const openingHash = location.hash;   // captured before we ever rewrite it
+
+    // Secrets at rest: a non-extractable AES-GCM key kept in IndexedDB wraps
+    // what goes to localStorage as "v1:" + base64(iv ‖ ciphertext). Without
+    // IndexedDB or WebCrypto (an old or locked-down browser) values stay clear.
+    const secrets = (() => {
+      const PREFIX = "v1:";
+      let keyPromise = null;
+      const idb = (mode, fn) => new Promise((resolve, reject) => {
+        const open = indexedDB.open("convo-secrets", 1);
+        open.onupgradeneeded = () => open.result.createObjectStore("keys");
+        open.onerror = () => reject(open.error);
+        open.onsuccess = () => {
+          const db = open.result;
+          const tx = db.transaction("keys", mode);
+          const req = fn(tx.objectStore("keys"));
+          req.onsuccess = () => { resolve(req.result); db.close(); };
+          req.onerror = () => { reject(req.error); db.close(); };
+        };
+      });
+      const key = () => {
+        if (!keyPromise) keyPromise = (async () => {
+          const held = await idb("readonly", (store) => store.get("wrap"));
+          if (held) return held;
+          const fresh = await crypto.subtle.generateKey({ name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+          await idb("readwrite", (store) => store.put(fresh, "wrap"));
+          return fresh;
+        })().catch(() => null);
+        return keyPromise;
+      };
+      const b64 = (bytes) => btoa(String.fromCharCode(...bytes));
+      const unb64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+      return {
+        PREFIX,
+        async seal(value) {
+          const k = await key();
+          if (!k) return value;
+          const iv = crypto.getRandomValues(new Uint8Array(12));
+          const sealed = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, k, new TextEncoder().encode(value)));
+          const joined = new Uint8Array(iv.length + sealed.length); joined.set(iv); joined.set(sealed, iv.length);
+          return PREFIX + b64(joined);
+        },
+        async open(stored) {
+          if (!stored.startsWith(PREFIX)) return stored;
+          try {
+            const k = await key();
+            if (!k) return "";
+            const bytes = unb64(stored.slice(PREFIX.length));
+            const opened = await crypto.subtle.decrypt({ name: "AES-GCM", iv: bytes.slice(0, 12) }, k, bytes.slice(12));
+            return new TextDecoder().decode(opened);
+          } catch (err) { return ""; }
+        },
+      };
+    })();
+
+    // The guest starts asking for things during its first render, which happens
+    // inside boot() — before boot() has returned us the bridge to answer on. So
+    // callbacks queue until the bridge exists, then drain in order.
+    const queued = [];
+    // Render right after any host callback. A state change that arrives from
+    // the network has nothing to repaint it otherwise, and neither timer is
+    // dependable: requestAnimationFrame is paused outright in a hidden tab,
+    // and Chrome throttles intervals to once a minute once a tab has been
+    // hidden a while. Rendering in the same task as the event sidesteps both.
+    function render() {
+      if (!bridge) return;
+      try { bridge.isoRender(); } catch (err) { console.warn("[convo] render", err); }
+    }
+
+    function withBridge(fn) {
+      if (!bridge) { queued.push(fn); return; }
+      fn(bridge);
+      render();
+    }
+    const emit = (kind, payload) =>
+      withBridge((b) => b.convoEvent(kind, String(payload)));
+    const done = (id, ok, payload) => {
+      if (!id) return;
+      withBridge((b) => b.convoRequestComplete(id, ok, String(payload)));
+    };
+
+    // Binary frames (Part III §23) cross the FFI as base64.
+    // Chunked: spreading a large buffer into fromCharCode overflows the
+    // call stack (a picture is hundreds of kilobytes).
+    const b64 = (bytes) => {
+      const u = new Uint8Array(bytes);
+      let s = "";
+      for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+      return btoa(s);
+    };
+    const unb64 = (text) => Uint8Array.from(atob(text), (c) => c.charCodeAt(0));
+
+    /// Trims SDP to what a data channel needs — smaller QR, easier scan. The
+    /// trailing CRLF is required: without it the last attribute is unterminated
+    /// and strict parsers reject the whole description.
+    
+    const gathered = (pc) => new Promise((resolve) => {
+      if (pc.iceGatheringState === "complete") return resolve();
+      // Don't wait forever on a candidate that may never arrive.
+      const timer = setTimeout(resolve, 3000);
+      pc.addEventListener("icegatheringstatechange", () => {
+        if (pc.iceGatheringState === "complete") { clearTimeout(timer); resolve(); }
+      });
+    });
+
+    // Once the link is up the codes are noise, and on the answering side they
+    // would otherwise cover the conversation. `connected` also suppresses a
+    // late draw: the answer QR is rendered right around the moment the channel
+    // opens, so clearing alone can lose the race.
+    let connected = false;
+    const clearQR = () => {
+      connected = true;
+      for (const id of ["invite-qr"]) {
+        const el = document.getElementById(id);
+        if (el) el.replaceChildren();
+      }
+    };
+
+    function wire(peer, dc) {
+      const entry = conns.get(peer);
+      if (entry) entry.channel = dc;
+      // A channel handed over by `ondatachannel` can already be open, in which
+      // case `onopen` never fires.
+      if (dc.readyState === "open") { clearQR(); emit("open", peer); }
+      dc.onopen = () => { clearQR(); emit("open", peer); };
+      dc.binaryType = "arraybuffer";
+      dc.onmessage = (e) => emit("frame", peer + " " + (typeof e.data === "string" ? btoa(e.data) : b64(e.data)));
+      // A closed channel is the end of this link, not a blip to wait out.
+      dc.onclose = () => emit("state", peer + " closed");
+    }
+
+    function closeEntry(peer) {
+      const entry = conns.get(peer);
+      if (!entry) return;
+      conns.delete(peer);
+      if (entry.localStream) for (const t of entry.localStream.getTracks()) t.stop();
+      if (entry.channel) { try { entry.channel.close(); } catch (e) {} }
+      try { entry.pc.close(); } catch (e) {}
+    }
+
+    function newConnection(peer) {
+      closeEntry(peer);
+      const pc = new RTCPeerConnection({ iceServers: STUN });
+      conns.set(peer, { pc, channel: null, localStream: null });
+      pc.onconnectionstatechange = () => emit("state", peer + " " + pc.connectionState);
+      pc.ondatachannel = (e) => wire(peer, e.channel);
+      pc.ontrack = (e) => {
+        const stream = e.streams[0] || new MediaStream([e.track]);
+        if (e.track.kind === "video") { remoteVideo.srcObject = stream; showVideo(true); }
+        else { remoteAudio.srcObject = stream; }
+      };
+      return pc;
+    }
+
+    // Simulate a network drop for testing reconnection: closing the peer
+    // connections is exactly what a WiFi→cellular switch does to the ICE
+    // path. Exposes nothing a user can't already do by closing the tab.
+    window.__convoDropConnection = () => {
+      for (const [peer, entry] of conns) {
+        if (entry.channel) { try { entry.channel.close(); } catch (e) {} }
+        try { entry.pc.close(); } catch (e) {}
+        emit("state", peer + " failed");
+      }
+    };
+    // Simulate a blip: what a connection reports when ICE drops for a
+    // moment and recovers (a call's renegotiation, a network hiccup) — the
+    // link must come back "online" by itself, not stay offline beside a
+    // working channel.
+    window.__convoBlip = () => {
+      for (const [peer] of conns) {
+        emit("state", peer + " disconnected");
+        setTimeout(() => emit("state", peer + " connected"), 3000);
+      }
+    };
+    window.__convoState = () => Object.fromEntries(
+      [...conns].map(([peer, e]) => [peer, {
+        pc: e.pc.connectionState, ice: e.pc.iceConnectionState,
+        sig: e.pc.signalingState, chan: e.channel && e.channel.readyState,
+      }])
+    );
+
+    // The same-origin return path: another tab in this browser receives the
+    // answer with no user action. Cross-device pairing uses the reply QR.
+    // Two tabs of one origin share localStorage, so without this they would
+    // boot the *same* identity — and a peer cannot form a group with itself.
+    // The first live tab keeps the durable identity; any further tab gets its
+    // own, which is also the honest model: two tabs are two participants.
+    // A heartbeat marks the durable slot as taken; a stale mark is reclaimable,
+    // so closing the tab doesn't strand the identity forever.
+    const CLAIM = "p2prc:claim", BEAT = 1000, STALE = 3000;
+    function claimSlot() {
+      const existing = sessionStorage.getItem("p2prc:slot");
+      if (existing) return existing;
+      let slot = "identity:" + Math.random().toString(36).slice(2, 10);
+      const held = Number(localStorage.getItem(CLAIM) || 0);
+      if (Date.now() - held > STALE) slot = "identity";
+      sessionStorage.setItem("p2prc:slot", slot);
+      return slot;
+    }
+    const SLOT = claimSlot();
+    if (SLOT === "identity") {
+      const beat = () => localStorage.setItem(CLAIM, String(Date.now()));
+      beat();
+      setInterval(beat, BEAT);
+    }
+    const scoped = (key) => "p2prc:" + (key === "identity" ? SLOT : key);
+
+    const host = {
+      async createOffer(requestID, peer) {
+        try {
+          const c = newConnection(peer);
+          wire(peer, c.createDataChannel("convo", { ordered: true }));
+          await c.setLocalDescription(await c.createOffer());
+          await gathered(c);
+          done(requestID, true, c.localDescription.sdp);
+        } catch (err) { done(requestID, false, err.message); }
+      },
+      async acceptOffer(requestID, peer, blob) {
+        try {
+          const c = newConnection(peer);
+          await c.setRemoteDescription({ type: "offer", sdp: blob });
+          await c.setLocalDescription(await c.createAnswer());
+          await gathered(c);
+          done(requestID, true, c.localDescription.sdp);
+        } catch (err) { done(requestID, false, err.message); }
+      },
+      async acceptAnswer(requestID, peer, blob) {
+        try {
+          const entry = conns.get(peer);
+          if (!entry) return done(requestID, false, "no connection");
+          await entry.pc.setRemoteDescription({ type: "answer", sdp: blob });
+          done(requestID, true, "");
+        } catch (err) { emit("error", err.message); }
+      },
+      sendFrame(peer, text) {
+        const entry = conns.get(peer);
+        if (entry && entry.channel && entry.channel.readyState === "open") entry.channel.send(unb64(text));
+      },
+      closeConnection(peer) { closeEntry(peer); },
+      setIceServers(json) {
+        try {
+          // Entries are { urls, username?, credential? }: STUN bare, TURN
+          // with the credentials a relay minted for us. (Older guests sent
+          // bare URL strings; accept those too.)
+          const entries = JSON.parse(json);
+          if (Array.isArray(entries) && entries.length) {
+            STUN = entries.map((e) => typeof e === "string" ? { urls: e } : e);
+          }
+        } catch (e) {}
+      },
+      // --- Calls: audio on the same pc, renegotiated over the channel. ----
+      async callStart(requestID, peer, video) {
+        try {
+          const entry = conns.get(peer);
+          if (!entry) return done(requestID, false, "");
+          entry.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: !!video });
+          for (const track of entry.localStream.getTracks()) entry.pc.addTrack(track, entry.localStream);
+          if (video) { localVideo.srcObject = entry.localStream; showVideo(true); }
+          const offer = await entry.pc.createOffer();
+          await entry.pc.setLocalDescription(offer);
+          await gathered(entry.pc);
+          done(requestID, true, entry.pc.localDescription.sdp);
+        } catch (err) { done(requestID, false, String((err && (err.name + ": " + err.message)) || err)); }
+      },
+      async callApplyRemote(requestID, peer, sdp, isOffer, video) {
+        try {
+          const entry = conns.get(peer);
+          if (!entry) return done(requestID, false, "");
+          if (isOffer && !entry.localStream) {
+            entry.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: !!video });
+            for (const track of entry.localStream.getTracks()) entry.pc.addTrack(track, entry.localStream);
+            if (video) { localVideo.srcObject = entry.localStream; showVideo(true); }
+          }
+          await entry.pc.setRemoteDescription({ type: isOffer ? "offer" : "answer", sdp });
+          if (!isOffer) return done(requestID, true, "");
+          const answer = await entry.pc.createAnswer();
+          await entry.pc.setLocalDescription(answer);
+          await gathered(entry.pc);
+          done(requestID, true, entry.pc.localDescription.sdp);
+        } catch (err) { done(requestID, false, String((err && (err.name + ": " + err.message)) || err)); }
+      },
+      callEnd(peer) {
+        const entry = conns.get(peer);
+        if (!entry) return;
+        if (entry.localStream) {
+          for (const track of entry.localStream.getTracks()) track.stop();
+          entry.localStream = null;
+        }
+        for (const sender of entry.pc.getSenders()) {
+          if (sender.track) { try { entry.pc.removeTrack(sender); } catch (e) {} }
+        }
+        remoteAudio.srcObject = null;
+        remoteVideo.srcObject = null;
+        localVideo.srcObject = null;
+        showVideo(false);
+      },
+      save(key, value) { localStorage.setItem(scoped(key), value); },
+      load(requestID, key) { done(requestID, true, localStorage.getItem(scoped(key)) || ""); },
+      // A browser has no keychain. Secrets sit in this origin's localStorage
+      // sealed (AES-GCM) under a non-extractable key that lives in IndexedDB
+      // and never exists as bytes a script can read; a value an earlier
+      // build stored in the clear is sealed on first read. (WebAuthn's PRF
+      // would bind it to the device's authenticator, but needs a tap at
+      // every launch; the recovery phrase remains the way to keep it.)
+      saveSecret(key, value) {
+        const name = scoped("secret:" + key);
+        if (!value) { localStorage.removeItem(name); return; }
+        secrets.seal(value).then((sealed) => localStorage.setItem(name, sealed));
+      },
+      loadSecret(requestID, key) {
+        const name = scoped("secret:" + key);
+        const stored = localStorage.getItem(name) || "";
+        secrets.open(stored).then((value) => {
+          if (stored && !stored.startsWith(secrets.PREFIX) && value) secrets.seal(value).then((sealed) => localStorage.setItem(name, sealed));
+          done(requestID, true, value);
+        });
+      },
+      pageURL(requestID) { done(requestID, true, location.origin + location.pathname); },
+      openingHash(requestID) { done(requestID, true, openingHash); },
+      setHash(value) { history.replaceState(null, "", "#" + value); },
+      // --- Networking stack ---------------------------------------------
+      //
+      // Mechanical only. No decisions live here: the guest picks which
+      // bootstrapper to ask, in what order, and whether to fall back to a
+      // public STUN server at all. This side just moves bytes and answers
+      // honestly about what it can do.
+      capabilities(requestID) {
+        // A tab pairs by opening the link; it cannot scan a code.
+        done(requestID, true, JSON.stringify({ scansQR: false, picksImages: true }));
+      },
+      // The seed signaling servers, from the page's own markup
+      // (<meta name="convo-seeds" content="https://node-1.p2prc.org,https://node-2.p2prc.org,https://node-3.p2prc.org">): configuration, not code.
+      seeds(requestID) {
+        const meta = document.querySelector('meta[name="convo-seeds"]');
+        done(requestID, true, meta ? meta.content : "");
+      },
+      async httpGet(requestID, url) {
+        try {
+          const response = await fetch(url, { mode: "cors" });
+          done(requestID, response.ok, response.ok ? await response.text() : "");
+        } catch (err) { done(requestID, false, ""); }
+      },
+      async httpPost(requestID, url, body) {
+        try {
+          const response = await fetch(url, {
+            method: "POST", mode: "cors", body,
+            headers: { "Content-Type": body.startsWith("{") ? "application/json" : "text/plain" },
+          });
+          done(requestID, response.ok, response.ok ? await response.text() : "");
+        } catch (err) { done(requestID, false, ""); }
+      },
+      async httpGetBytes(requestID, url) {
+        try {
+          const response = await fetch(url, { mode: "cors" });
+          done(requestID, response.ok, response.ok ? b64(await response.arrayBuffer()) : "");
+        } catch (err) { done(requestID, false, ""); }
+      },
+      // A picture to send: the file chooser (the camera roll on a phone),
+      // downscaled on a canvas and re-encoded, so the message carries a
+      // bounded JPEG whatever was chosen.
+      pickImage(requestID) {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.style.display = "none";
+        document.body.appendChild(input);
+        const finish = (ok, text) => { input.remove(); done(requestID, ok, text || ""); };
+        input.onchange = async () => {
+          const file = input.files && input.files[0];
+          if (!file) return finish(false, "");
+          try {
+            const bitmap = await createImageBitmap(file);
+            const scale = Math.min(1, 1600 / Math.max(bitmap.width, bitmap.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+            canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+            canvas.getContext("2d").drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.82));
+            finish(!!blob, blob ? "image/jpeg|" + canvas.width + "|" + canvas.height + "|" + b64(await blob.arrayBuffer()) : "");
+          } catch (err) { finish(false, ""); }
+        };
+        window.addEventListener("focus", () => {
+          setTimeout(() => { if (!input.files || !input.files.length) finish(false, ""); }, 1200);
+        }, { once: true });
+        input.click();
+      },
+      // Decoded picture bytes as something AsyncImage can show: an object
+      // URL for the session (one per key).
+      imageURLs: new Map(),
+      imageURL(requestID, key, bytes64, mime) {
+        try {
+          let url = this.imageURLs.get(key);
+          if (!url) { url = URL.createObjectURL(new Blob([unb64(bytes64)], { type: mime })); this.imageURLs.set(key, url); }
+          done(requestID, true, url);
+        } catch (err) { done(requestID, false, ""); }
+      },
+      // A member-only GET (protocol §19): the signature rides in a header.
+      async httpGetBytesSigned(requestID, url, auth) {
+        try {
+          const response = await fetch(url, { mode: "cors", headers: { "X-Convo-Auth": auth } });
+          done(requestID, response.ok, response.ok ? b64(await response.arrayBuffer()) : "");
+        } catch (err) { done(requestID, false, ""); }
+      },
+      async httpPostBytes(requestID, url, body64) {
+        try {
+          const response = await fetch(url, {
+            method: "POST", mode: "cors", body: unb64(body64),
+            headers: { "Content-Type": "application/octet-stream" },
+          });
+          done(requestID, response.ok, response.ok ? b64(await response.arrayBuffer()) : "");
+        } catch (err) { done(requestID, false, ""); }
+      },
+      delay(requestID, ms) { setTimeout(() => done(requestID, true, ""), ms); },
+      copyText(text) {
+        if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(text).catch(() => {}); return; }
+        // Older browsers: a selected textarea and execCommand.
+        const area = document.createElement("textarea");
+        area.value = text; area.setAttribute("readonly", ""); area.style.position = "fixed"; area.style.opacity = "0";
+        document.body.appendChild(area); area.select();
+        try { document.execCommand("copy"); } catch (err) {}
+        area.remove();
+      },
+      share(text) {
+        if (navigator.share) { navigator.share({ text }).catch(() => {}); return; }
+        navigator.clipboard?.writeText(text).catch(() => {});
+      },
+      // A QR from a picture, decoded entirely in this tab. The file input
+      // is the web's camera bridge: on a phone `capture` opens the camera,
+      // on a laptop it opens the picker. BarcodeDetector where the browser
+      // has one (Chrome), jsQR everywhere else (Safari).
+      scanQR(requestID) {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.accept = "image/*";
+        input.capture = "environment";
+        input.style.display = "none";
+        document.body.appendChild(input);
+        const finish = (ok, text) => { input.remove(); done(requestID, ok, text || ""); };
+        input.onchange = async () => {
+          const file = input.files && input.files[0];
+          if (!file) return finish(false, "");
+          try {
+            const bitmap = await createImageBitmap(file);
+            if ("BarcodeDetector" in window) {
+              try {
+                const found = await new BarcodeDetector({ formats: ["qr_code"] }).detect(bitmap);
+                if (found.length) return finish(true, found[0].rawValue);
+              } catch (e) { /* fall through to jsQR */ }
+            }
+            // Downscale for jsQR: huge camera frames are slow and no more
+            // decodable than 1200px ones.
+            const scale = Math.min(1, 1200 / Math.max(bitmap.width, bitmap.height));
+            const canvas = document.createElement("canvas");
+            canvas.width = Math.round(bitmap.width * scale);
+            canvas.height = Math.round(bitmap.height * scale);
+            const ctx = canvas.getContext("2d");
+            ctx.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const hit = window.jsQR && window.jsQR(data.data, canvas.width, canvas.height);
+            finish(!!hit, hit ? hit.data : "");
+          } catch (err) { finish(false, ""); }
+        };
+        // If the picker is dismissed nothing fires; reclaim on refocus.
+        window.addEventListener("focus", () => {
+          setTimeout(() => { if (!input.files || !input.files.length) finish(false, ""); }, 1200);
+        }, { once: true });
+        input.click();
+      },
+      saveQR(elementID) {
+        const img = document.querySelector("#" + elementID + " img");
+        if (!img) return;
+        const link = document.createElement("a");
+        link.href = img.src;
+        link.download = "convo-invite.png";
+        link.click();
+      },
+
+      qrImage(requestID, text) {
+        try {
+          const qr = qrcode(0, "L");
+          qr.addData(text);
+          qr.make();
+          done(requestID, true, qr.createDataURL(4, 8));
+        } catch (e) {
+          done(requestID, false, "");
+        }
+      },
+
+      drawQR(elementID, text) {
+        if (connected) return;
+        const el = document.getElementById(elementID);
+        if (!el) return;
+        // Empty text means "clear it" — the client sends this when a pairing
+        // is cancelled, so the code doesn't linger over the start screen.
+        if (!text) { el.replaceChildren(); return; }
+        if (window.ConvoQR) window.ConvoQR.draw(el, text);
+      },
+    };
+
+    boot({
+      canvas: document.getElementById("canvas"),
+      // Local development serves without cache headers, and a stale cached
+      // module quietly runs old client logic against new HTML. Bust it there;
+      // the published site relies on normal HTTP caching.
+      wasmURL: "./app.wasm" + (location.hostname === "localhost" ? "?t=" + Date.now() : ""),
+      rendererName: new URLSearchParams(location.search).get("renderer") || "dom",
+      dependencies: { host: Dependencies.convoHost(() => host) },
+    }).then((result) => {
+      bridge = result.bridge;
+      while (queued.length) queued.shift()(bridge);
+      // Drive the renderer every frame.
+      //
+      // State here changes from host callbacks — a WebRTC channel opening, a
+      // frame arriving, a peer's answer landing — all of which happen outside
+      // the renderer's own event loop, and none of which schedule a repaint.
+      // Without this the model updates correctly and the screen never moves,
+      // which looks exactly like a hang. Rendering is diff-then-patch, so an
+      // idle frame costs a tree walk and no DOM work.
+      // A steady frame loop for animation and text input while visible; the
+      // per-event render above is what keeps a backgrounded tab correct.
+      (function frame() { render(); requestAnimationFrame(frame); })();
+    }).catch((error) => {
+      console.error(error);
+      const pre = document.createElement("pre");
+      pre.id = "error";
+      pre.textContent = String(error.stack || error);
+      document.body.replaceChildren(pre);
+    });
+  </script>
+</body>
+</html>

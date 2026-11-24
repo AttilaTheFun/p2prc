@@ -1,0 +1,110 @@
+common --enable_bzlmod
+
+# Modules from the project's registry first (isomer's releases and the forks
+# it carries, rules_swift's and rules_apple's among them, by version), then
+# the Bazel Central Registry.
+common --registry=https://raw.githubusercontent.com/AttilaTheFun/bazel_registry/main
+common --registry=https://bcr.bazel.build
+
+# Release builds: optimized (the web's reactor without its function names).
+build:release -c opt
+
+# Isomer's AndroidX is the app's own (MODULE.bazel's p2prc_maven, with
+# CameraX beside it; isomer's docs/android_maven.md): the set exporting what
+# Isomer's does, and the Compose compiler for rules_kotlin's kotlinc.
+build --@isomer//android/maven:androidx=//third_party:androidx_for_isomer
+build --@isomer//android/maven:compose_compiler=//third_party:compose_compiler
+
+# Keep actions sandboxed by default for hermeticity.
+build --spawn_strategy=sandboxed,local
+build --enable_platform_specific_config
+
+# hermetic_android_toolchains' NDK/SDK licenses (needed to resolve its
+# toolchains, even when only building for Apple platforms).
+common --repo_env=ACCEPTED_ANDROID_NDK_LICENSE_VERSION=r30
+common --repo_env=ACCEPTED_ANDROID_SDK_LICENSE_VERSION=35
+
+# The hermetic emulator is arm64, so the APK targets arm64-v8a. rules_android's
+# `android_binary` reads this to drive its per-ABI native-lib split and names
+# the APK's lib/<abi>/ directory after the platform.
+common --android_platforms=@rules_android//:arm64-v8a
+
+# rules_java's hermetic remote JDK 17 for rules_android's Java actions
+# (aapt2/d8/apksigner wrappers) instead of requiring a host JDK.
+common --java_language_version=17
+common --java_runtime_version=remotejdk_17
+common --tool_java_language_version=17
+common --tool_java_runtime_version=remotejdk_17
+
+# The swift_ffi macro plugin is built (exec config) by the host's Swift
+# toolchain, but the wasm and Android cross-compiles are driven by the
+# swift.org 6.4.2 frontend; loading the plugin inside the sandbox fails to
+# reach the Swift runtime dylibs ("produced malformed response"), so run
+# Swift compiles local.
+build --strategy=SwiftCompile=local
+
+# rules_swift_package_manager wraps every package target in a minimum-OS
+# transition keyed on --apple_platform_type, which defaults to macos even in
+# the wasm and Android configurations; with these flags already at the
+# packages' value (macOS 15) the transition is a no-op, so the packages and
+# everything beneath them stay in the consumer's configuration, one copy.
+# rules_apple's own platform transitions set the iOS deployment target per
+# app regardless.
+build --minimum_os_version=15.0
+common --macos_minimum_os=15.0
+build --host_macos_minimum_os=15.0
+build --ios_minimum_os=18.0
+
+build --apple_generate_dsym=false
+
+build --show_progress_rate_limit=5
+build --verbose_failures
+
+test --test_output=errors
+
+# --- Linux host (a container, CI) ------------------------------------------
+# The swift.org toolchain's `swift_toolchain` rule requires a clang CC
+# toolchain, and swift_ffi's analyzer/generator tools resolve the Swift
+# runtime by a RUNPATH relative to the exec root, so they run unsandboxed.
+build:linux --repo_env=CC=clang
+build:linux --repo_env=CXX=clang++
+build:linux --strategy=SwiftFFIAnalyze=local
+build:linux --strategy=SwiftFFIGenerate=local
+
+# The Apple targets built on Linux with rules_applecross (MODULE.bazel), on a
+# builder that has Xcode 27.0's SDK archive: its .bazelrc.user says where
+# (`--distdir`, or a `--downloader_config`) and turns this on with
+# `build:linux --config=apple_on_linux`. A Mac builds with its own Xcode.
+startup --host_jvm_args=-DBAZEL_TRACK_SOURCE_DIRECTORIES=1
+common --incompatible_repo_env_ignores_action_env
+common:linux --repo_env=BAZEL_NO_APPLE_CPP_TOOLCHAIN=1
+build:apple_on_linux --extra_toolchains=@apple_cross_toolchain//:all
+build:apple_on_linux --xcode_version_config=@apple_cross_toolchain//:host_xcodes
+build:apple_on_linux --@build_bazel_rules_apple//apple:sdk_tool_files=@apple_cross_toolchain//:sdk_tool_files
+build:apple_on_linux --action_env=DEVELOPER_DIR=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer
+build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/bin:/usr/bin:/usr/local/bin
+build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
+build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
+
+# An iPhone build for CI to sign (its alpha job): arm64, signed ad hoc with
+# its entitlements and a placeholder profile (tools/signing), which CI's
+# signer replaces with com.LoganShire.P2PRC's own.
+build:ci_device --ios_multi_cpus=arm64
+build:ci_device --ios_signing_cert_name=-
+
+# Android apps linked to ship: optimized for size, each JNI library exporting
+# its entry points alone, stripped, no Swift module embedded for the debugger
+# (isomer's README, "Android release size").
+build:android_release -c opt
+build:android_release --@rules_swift//swift:copt=-Osize
+build:android_release --features=swift.no_embed_debug_module
+build:android_release --@isomer//swift_ffi/rules:jni_exports_only
+
+# The builder's own settings, such as CONVO_TEAM_ID (tools/signing), which
+# are not checked in.
+try-import %workspace%/.bazelrc.user
+
+# No MODULE.bazel.lock: it churns across machines and Bazel versions (as
+# playground and isomer's examples); the versions are pinned in MODULE.bazel
+# and third_party/swift_packages/Package.resolved.
+common --lockfile_mode=off

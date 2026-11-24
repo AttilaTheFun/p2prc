@@ -1,0 +1,20 @@
+# The Convo client's dependency-injection surface.
+#
+# swift_ffi ABI v3: the whole C ABI is macro-expanded into this annotated
+# module as `@c` entry points — there is no generated Swift glue. Reactors
+# and hosts link `:convo_services` directly; the exports live under the
+# per-declaration namespace "convo" (swift_ffi_convo_*), and host-side
+# bindings (TypeScript for the browser, Kotlin for Android) are generated
+# from this module's IR by the bridge rules that consume it.
+
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+swift_library(
+    name = "convo_services",
+    srcs = ["ConvoServices.swift"],
+    module_name = "ConvoServices",
+    tags = ["manual"],
+    deps = ["@isomer//swift_ffi/swift_ffi"],
+)

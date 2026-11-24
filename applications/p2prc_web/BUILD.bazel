@@ -1,0 +1,96 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("@isomer//swift_ffi/rules:js_swift_wasm_library.bzl", "js_swift_wasm_library")
+load("@isomer//tools/wasm:defs.bzl", "static_site")
+
+package(default_visibility = ["//visibility:public"])
+
+# The app archive. Whole-archive + `-parse-as-library`: the only reference to
+# the synthesized @main is the isoStart trampoline in the SwiftUI archive,
+# which links after this one.
+swift_library(
+    name = "app_lib",
+    srcs = ["ConvoApp.swift"],
+    alwayslink = True,
+    copts = ["-parse-as-library"],
+    module_name = "ConvoWeb",
+    # wasm-only: on Apple platforms `ObservableObject` resolves from both
+    # Foundation and isomer's portable SwiftUI, so a host build of this
+    # archive is both meaningless and ambiguous.
+    tags = ["manual"],
+    deps = [
+        "//libraries/convo_app",
+        "//libraries/convo_ui",
+        "@isomer//wasm/libraries/swift_ui",
+        "@isomer//wasm/libraries/swift_ui:isomer",
+    ],
+)
+
+# Shipped exporting only what the page calls: swift_ffi's entries
+# (`swift_ffi_*`: isomer's web bridge, the Metal executor's hookup and our
+# services in namespace "convo") plus the runtime's fixed ones, read from a
+# link exporting everything, as isomer_web_app does. (Not isomer_web_app
+# itself: the iOS and macOS apps carry this site as a resource under its
+# own name, and the page is the app's own index.html with its host.)
+js_swift_wasm_library(
+    name = "app_bridge",
+    exports = "host",
+    linkopts = [
+        # wasm-ld defaults the linear stack to ~1 MiB, which Swift's deeply
+        # recursive view-tree / generic-metadata instantiation overflows.
+        "-Xlinker",
+        "-z",
+        "-Xlinker",
+        "stack-size=16777216",
+    ] + select({
+        # Optimized, without its function names; a build to debug keeps
+        # them for the browser's stack traces.
+        "@isomer//tools/wasm:opt": [
+            "-Xlinker",
+            "--strip-all",
+        ],
+        "//conditions:default": [],
+    }),
+    module_name = "SwiftUI",
+    swift = ":app_lib",
+)
+
+static_site(
+    name = "p2prc_web",
+    assets = [
+        "//artwork/app_icon:web_icons",
+        "jsqr.js",
+        "manifest.webmanifest",
+        "qr.js",
+        "qrcode.js",
+    ],
+    index = "index.html",
+    root_js = [":app_bridge"],
+    # Isomer's runtime, as isomer_web_app serves it (isomer's
+    # tools/wasm/defs.bzl): its DOM renderer draws without React since 0.49.
+    runtime_js = [
+        "@isomer//wasm/libraries/swift_ui:runtime/boot.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/bundle_provider.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/flat_tree.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/dom_renderer.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/dom_core.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/render_style.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/react_embed.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/raster.js",
+        # The SF Symbol → vector table the renderer draws icons from.
+        "@isomer//wasm/libraries/swift_ui:runtime/symbols.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/platform_services.js",
+        # Files the page hands to Swift (.fileImporter, drops).
+        "@isomer//wasm/libraries/swift_ui:runtime/imported_files.js",
+        # Foundation's FileManager (IndexedDB) and URLSession (fetch,
+        # WebSocket) on the web.
+        "@isomer//wasm/libraries/swift_ui:runtime/file_system.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/network.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/haptics.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/fonts.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/session_host.js",
+        "@isomer//wasm/libraries/swift_ui:runtime/session_messages.js",
+        # Isomer's Metal executor: the only navigator.gpu code.
+        "@isomer//metal/runtime:runtime_js",
+    ],
+    wasm = ":app_bridge.wasm",
+)

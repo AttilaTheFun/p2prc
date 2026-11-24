@@ -1,0 +1,20 @@
+load("@rules_cc//cc:defs.bzl", "cc_library")
+load("@rules_swift//swift:swift.bzl", "swift_interop_hint")
+
+package(default_visibility = ["//visibility:public"])
+
+# Gzip for the pairing blobs, via the system zlib rather than Apple's
+# Compression framework — libcompression's encoder emits streams Chromium's
+# strict inflate rejects. See convo_gzip.h for the full story.
+cc_library(
+    name = "convo_gzip",
+    srcs = ["convo_gzip.c"],
+    hdrs = ["convo_gzip.h"],
+    aspect_hints = [":convo_gzip_swift"],
+    linkopts = ["-lz"],
+)
+
+swift_interop_hint(
+    name = "convo_gzip_swift",
+    module_name = "CConvoGzip",
+)

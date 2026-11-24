@@ -1,0 +1,37 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+package(default_visibility = ["//visibility:public"])
+
+# The shared conversation UI, compiled several ways: real SwiftUI for the iOS
+# and macOS apps, isomer's portable SwiftUI for the web wasm build and
+# the NDK-compiled Android build. `import SwiftUI` resolves to the right one
+# per platform (select below); the source is identical everywhere.
+swift_library(
+    name = "convo_ui",
+    srcs = glob(["Sources/*.swift"]),
+    module_name = "ConvoUI",
+    tags = ["manual"],
+    deps = [
+        "//libraries/convo_app",
+        "@swiftpkg_protocol//:ConvoMLS",
+        # The chat interface, the same SwiftPM package on every platform.
+        "@swiftpkg_agent_ui//:InboxUI",
+        "@swiftpkg_agent_ui//:MessagesUI",
+        "@swiftpkg_agent_ui//:NavigationUI",
+    ] + select({
+        # SwiftUIExtensions (Platform.current) comes through IsomerBridge,
+        # which re-exports it.
+        "@platforms//os:wasi": [
+            "@isomer//wasm/libraries/swift_ui",
+            "@isomer//wasm/libraries/swift_ui:isomer",
+        ],
+        "@platforms//os:android": [
+            "@isomer//android/libraries/swift_ui",
+            "@isomer//android/libraries/swift_ui:isomer",
+        ],
+        "//conditions:default": [
+            "@isomer//apple/libraries/swift_ui",
+            "@isomer//apple/libraries/swift_ui:isomer",
+        ],
+    }),
+)

@@ -1,0 +1,23 @@
+package(default_visibility = ["//visibility:public"])
+
+# The Android launcher icon (isomer_android_app `icon`, 192 px).
+exports_files(["Convo-192.png"])
+
+# Convo's icon as an Icon Composer document: what the iOS and macOS apps
+# compile through `app_icons` (the platform supplies the shape and the
+# material treatment).
+filegroup(
+    name = "app_icon",
+    srcs = glob(["Convo.icon/**"]),
+)
+
+# Its PNG exports for the web client: the favicon and touch icon (1024) and
+# the install manifest's sizes (192, 512).
+filegroup(
+    name = "web_icons",
+    srcs = [
+        "Convo-1024.png",
+        "Convo-192.png",
+        "Convo-512.png",
+    ],
+)

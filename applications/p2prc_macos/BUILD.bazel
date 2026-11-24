@@ -1,0 +1,62 @@
+load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
+load("@rules_swift//swift:swift.bzl", "swift_library")
+load("//tools/signing:defs.bzl", "team_plist")
+
+package(default_visibility = ["//visibility:public"])
+
+# Convo on the Mac: the same compiled Swift + real SwiftUI the iOS app builds,
+# sharing the same host sources. Only two things differ between AppKit and
+# UIKit — the share affordance and the QR image type — and both are `#if`s
+# inside those shared sources. The AppKit menu-bar @main lives here; the iOS
+# SwiftUI @main stays in p2prc_ios (both ride the shared filegroup guarded by
+# os() so each app compiles exactly one entry point).
+swift_library(
+    name = "macos_lib",
+    srcs = glob(["Sources/**/*.swift"]) + ["//applications/p2prc_ios:host_srcs"],
+    module_name = "ConvoMacOSHost",
+    deps = [
+        "@swiftpkg_communication//:Communication",
+        "@swiftpkg_communication//:CommunicationWebRTC",
+        "@swiftpkg_protocol//:ConvoCalling",
+        "@swiftpkg_protocol//:ConvoNet",
+        "@swiftpkg_shake_kit//:ShakeKit",
+        "@swiftpkg_update_kit//:UpdateKit",
+        "@swiftpkg_agent_ui//:MessagesUI",
+        "//libraries/convo_app",
+        "//libraries/convo_gzip",
+        "//libraries/convo_bundle",
+        "//libraries/convo_services",
+        "//libraries/convo_ui",
+        "@isomer//swift_ffi/swift_ffi",
+        "@isomer//apple/libraries/swift_ui",
+        "@isomer//apple/libraries/swift_ui:isomer",
+    ],
+)
+
+# The shared sign-in and UpdateKit's app group, in the team's own builds,
+# with Shireworks' bundle id. They take effect once the Mac app is signed
+# with a profile that grants the keychain and app groups; until then shake
+# to report does nothing on the Mac (ShakeKit has no sign-in of its own).
+team_plist(
+    name = "team_info",
+    applications_bundle_ids = ["com.LoganShire.Shireworks"],
+)
+
+macos_application(
+    name = "p2prc_macos",
+    app_icons = ["//artwork/app_icon"],
+    # One App ID for the iPhone, iPad and Mac apps.
+    bundle_id = "com.LoganShire.P2PRC",
+    infoplists = [
+        "Info.plist",
+        ":team_info.plist",
+    ],
+    minimum_os_version = "15.0",
+    resources = [
+        # The site this Mac hands to a browser that has nothing yet — the same
+        # signed bundle GitHub Pages would otherwise serve. Carrying it is what
+        # makes this a bootstrapper rather than only a client.
+        "//applications/p2prc_web",
+    ],
+    deps = [":macos_lib"],
+)

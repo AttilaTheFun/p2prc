@@ -1,0 +1,41 @@
+{
+  "fill": {
+    "automatic-gradient": "extended-srgb:0.03500,0.07800,0.12500,1.00000"
+  },
+  "groups": [
+    {
+      "name": "Interlocking Conversations",
+      "layers": [
+        {
+          "glass": false,
+          "image-name": "Violet-Front-Link.svg",
+          "name": "Violet-Front-Link"
+        },
+        {
+          "glass": false,
+          "image-name": "Mint-Bubble.svg",
+          "name": "Mint-Bubble"
+        },
+        {
+          "glass": false,
+          "image-name": "Violet-Bubble.svg",
+          "name": "Violet-Bubble"
+        }
+      ],
+      "shadow": {
+        "kind": "neutral",
+        "opacity": 0.5
+      },
+      "translucency": {
+        "enabled": false,
+        "value": 0
+      }
+    }
+  ],
+  "supported-platforms": {
+    "circles": [
+      "watchOS"
+    ],
+    "squares": "shared"
+  }
+}

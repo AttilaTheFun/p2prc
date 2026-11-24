@@ -1,0 +1,14 @@
+{
+  "derivation" : "HKDF-SHA256(ikm=seed, salt=\"convo\", info=\"convo\/identity\/v1\", 32)",
+  "gk_pk" : "ef099c68ee314a8bcb3309ea81add7354db3d5ae82843eb0f7615e80b5c4c161",
+  "gk_salt" : "5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a5a",
+  "hpke_seed" : [
+    "6e645cf7ae3f0c553a14126513423fe66571295a939783a90bf332b106e9b97c",
+    "3b6c1e5eb3bb6f2648046723b1a07bb1574963e1f5d567f4958674c0ad584615",
+    "f4a0ec8368839735e89e59ca15138d1d6737a54cc3c9f6dfb8560df0a16c19c3"
+  ],
+  "id_pk" : "8c5b84b782e934f2d975ffb0348639649fceaef2bd0fc1015aa53330b19ca330",
+  "id_sk" : "10d81da0c1ac714fdf3045020502143c2b39bd03eba0631d55220e60b4075bbb",
+  "mnemonic" : "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+  "seed" : "5eb00bbddcf069084889a8ab9155568165f5c453ccb85e70811aaed6f6da5fc19a5ac40b389cd370d086206dec8aa6c43daea6690f20ad3d8d48b2d2ce9e38e4"
+}

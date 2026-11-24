@@ -1,0 +1,6 @@
+# rules_swift_package_manager reads these to generate Bazel targets from
+# Apple's own package manifest.
+exports_files([
+    "Package.swift",
+    "Package.resolved",
+])

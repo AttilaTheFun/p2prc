@@ -1,0 +1,17 @@
+load("@rules_swift//swift:swift.bzl", "swift_library")
+
+# The protocol's ConvoFoundation (protocol/Sources/ConvoFoundation) takes
+# Foundation, not FoundationEssentials alone, on WASI when this define is
+# set: the apps' wasm build is on Isomer's Swift SDK, whose Foundation is
+# FoundationEssentials with Isomer's additions (CharacterSet, NSString's API,
+# URLSession…), which FoundationEssentials alone would hide. rules_swift
+# passes a swift_library's `defines` on to every target that depends on it;
+# MODULE.bazel adds this one to ConvoFoundation's deps. The node's Worker,
+# built with SwiftPM on swift.org's wasm SDK, never sees it.
+swift_library(
+    name = "isomer_foundation",
+    srcs = ["IsomerFoundation.swift"],
+    defines = ["CONVO_ISOMER_FOUNDATION"],
+    module_name = "ConvoIsomerFoundation",
+    visibility = ["//visibility:public"],
+)

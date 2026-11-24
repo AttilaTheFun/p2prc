@@ -1,0 +1,23 @@
+load(
+    "@rules_xcodeproj//xcodeproj:defs.bzl",
+    "top_level_target",
+    "xcodeproj",
+)
+
+# Generates Convo.xcodeproj for building and signing the iOS app on physical
+# devices with Xcode-managed provisioning: bazel run //:xcodeproj
+xcodeproj(
+    name = "xcodeproj",
+    project_name = "Convo",
+    tags = ["manual"],
+    top_level_targets = [
+        top_level_target(
+            "//applications/p2prc_ios",
+            target_environments = [
+                "device",
+                "simulator",
+            ],
+        ),
+        "//applications/p2prc_macos",
+    ],
+)

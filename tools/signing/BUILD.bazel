@@ -1,0 +1,9 @@
+load(":defs.bzl", "ci_placeholder_profile")
+
+package(default_visibility = ["//visibility:public"])
+
+# The builder's signing values (extension.bzl): read from the machine by the
+# `convo_signing` repository, never written into the repository.
+
+# CI's iPhone build's profile (--config=ci_device), replaced when CI signs it.
+ci_placeholder_profile(name = "ci_placeholder_profile")
