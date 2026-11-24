@@ -1,5 +1,21 @@
-# Only what needs the owner himself: CI and its workflows, and signing.
-# Everything else is reviewed without asking him.
+# Only what needs the owner himself: CI and its workflows, and what
+# publishes, stamps, signs or checks a release's builds. Everything else is
+# reviewed without asking him. As the Playground's CODEOWNERS.
 /.github/ @AttilaTheFun
 /tools/ci_tools/ @AttilaTheFun
 /tools/signing/ @AttilaTheFun
+
+# Publishing, versions and signing (the workflow's release jobs).
+/tools/convo_ci/ @AttilaTheFun
+/tools/ci/AppleIncRootCertificate.cer @AttilaTheFun
+/tools/ci/attach_release.sh @AttilaTheFun
+/tools/ci/check_mac_icons.sh @AttilaTheFun
+/tools/ci/check_version_line.sh @AttilaTheFun
+/tools/ci/draft_release.sh @AttilaTheFun
+/tools/ci/package_web.sh @AttilaTheFun
+/tools/ci/release_alphas.sh @AttilaTheFun
+/tools/ci/stamp_apps.sh @AttilaTheFun
+/tools/ci/version_from_tags.sh @AttilaTheFun
+/tools/ci/verified.sh @AttilaTheFun
+# Bazel's settings in CI, BuildBuddy's key among them.
+/tools/ci/ci_bazel.sh @AttilaTheFun
