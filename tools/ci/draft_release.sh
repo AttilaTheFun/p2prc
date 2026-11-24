@@ -39,10 +39,27 @@ previous="$(git describe --tags --abbrev=0 --match 'v[0-9]*' HEAD^ 2> /dev/null 
         git log --first-parent --format='- %s' "$previous..HEAD"
     fi
 } > "$notes"
-# GitHub's REST API over curl: CI's container has no gh.
+# GitHub's REST API over curl: CI's container has no gh. A refusal says
+# what GitHub refused: its status, message and documentation link (an
+# unexplained 403 once failed a draft here with nothing to go on).
 api() {
-    curl -fsS -H "Authorization: Bearer ${GH_TOKEN:?}" -H "Accept: application/vnd.github+json" \
-        -H "X-GitHub-Api-Version: 2022-11-28" "$@"
+    local body status
+    body="$(mktemp)"
+    status="$(curl -sS -o "$body" -w '%{http_code}' -H "Authorization: Bearer ${GH_TOKEN:?}" \
+        -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$@")" || { rm -f "$body"; return 1; }
+    if [ "$status" -ge 300 ]; then
+        local url="" arg
+        for arg in "$@"; do case "$arg" in https://*) url="$arg" ;; esac; done
+        echo "::error::GitHub answered $status to $url: $(python3 -c 'import json, sys
+try:
+    d = json.load(open(sys.argv[1])); print(d.get("message", ""), d.get("documentation_url", ""), json.dumps(d.get("errors", "")))
+except Exception:
+    print(open(sys.argv[1]).read()[:500])' "$body")" >&2
+        rm -f "$body"
+        return 1
+    fi
+    cat "$body"
+    rm -f "$body"
 }
 # A draft of this tag from an earlier run goes (a draft has no tag yet, so
 # it is found among the releases, not by its tag).
