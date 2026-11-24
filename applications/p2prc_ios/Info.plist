@@ -43,5 +43,13 @@
   <string>Connect directly to someone you're pairing with on the same network.</string>
   <key>NSAppTransportSecurity</key>
   <dict><key>NSAllowsArbitraryLoads</key><true/></dict>
+  <!-- p2prc:// : Applications' Open, and invite and handoff links. -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key><string>com.LoganShire.P2PRC</string>
+      <key>CFBundleURLSchemes</key><array><string>p2prc</string></array>
+    </dict>
+  </array>
 </dict>
 </plist>
