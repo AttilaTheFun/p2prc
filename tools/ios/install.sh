@@ -9,9 +9,9 @@
 set -euo pipefail
 
 BUNDLE_ID="com.LoganShire.P2PRC"
-# The signing team: CONVO_TEAM, else the team of the profile found for the
+# The signing team: P2PRC_TEAM, else the team of the profile found for the
 # app (its own, not a wildcard). No team id is written in the repository.
-TEAM="${CONVO_TEAM:-}"
+TEAM="${P2PRC_TEAM:-}"
 # The signing certificate is the one the chosen profile lists (read below):
 # signing with any other installs cleanly right up until the device refuses it.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
@@ -76,7 +76,7 @@ PROFILE=$(profile "$UDID") || {
 }
 echo "using profile $(basename "$PROFILE")"
 [[ -n "$TEAM" ]] || TEAM=$(security cms -D -i "$PROFILE" 2>/dev/null | plutil -extract TeamIdentifier.0 raw - 2>/dev/null)
-[[ -n "$TEAM" ]] || { echo "the profile names no team; set CONVO_TEAM" >&2; exit 1; }
+[[ -n "$TEAM" ]] || { echo "the profile names no team; set P2PRC_TEAM" >&2; exit 1; }
 # Sign with the exact certificate the profile lists, by its SHA-1: a revoked
 # certificate can stay in the keychain under the same name as its
 # replacement, and codesign refuses a name that matches both.

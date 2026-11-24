@@ -33,14 +33,10 @@ swift_library(
     ],
 )
 
-# The shared sign-in and UpdateKit's app group, in the team's own builds,
-# with Shireworks' bundle id. They take effect once the Mac app is signed
-# with a profile that grants the keychain and app groups; until then shake
-# to report does nothing on the Mac (ShakeKit has no sign-in of its own).
-team_plist(
-    name = "team_info",
-    applications_bundle_ids = ["com.LoganShire.Shireworks"],
-)
+# UpdateKit's settings and the shared sign-in, where the build has them
+# (tools/signing). The sign-in takes effect once the Mac app is signed with a
+# profile that grants its keychain and app groups.
+team_plist(name = "team_info")
 
 macos_application(
     name = "p2prc_macos",

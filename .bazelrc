@@ -100,7 +100,7 @@ build:android_release --@rules_swift//swift:copt=-Osize
 build:android_release --features=swift.no_embed_debug_module
 build:android_release --@isomer//swift_ffi/rules:jni_exports_only
 
-# The builder's own settings, such as CONVO_TEAM_ID (tools/signing), which
+# The builder's own settings, such as P2PRC_TEAM_ID (tools/signing), which
 # are not checked in.
 try-import %workspace%/.bazelrc.user
 

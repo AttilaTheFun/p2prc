@@ -1,23 +1,30 @@
-"""The builder's own signing values, from the machine, not the repo.
+"""The builder's own signing values, from the machine and the build's
+environment, never the repository.
 
 `@convo_signing//:signing.bzl` defines:
 
 - IOS_PROFILE: the name of the newest unexpired iOS development profile on
-  this Mac for com.LoganShire.P2PRC itself, of CONVO_TEAM_ID's team when
-  that's set (not a wildcard: iOS refuses an
-  app signed as `<team>.*`), from Xcode's and MobileDevice's profile folders,
-  or "" when there is none (on Linux, say);
-- TEAM_ID: the Apple team that signs Convo's builds: CONVO_TEAM_ID if it's
-  set (a `.bazelrc.user` at the repository's root, not checked in:
-  `common --repo_env=CONVO_TEAM_ID=<your team id>`), else that profile's
-  team, else "".
+  this Mac for com.LoganShire.P2PRC itself, of P2PRC_TEAM_ID's team when
+  that's set (not a wildcard: iOS refuses an app signed as `<team>.*`), from
+  Xcode's and MobileDevice's profile folders, or "" when there is none (on
+  Linux, say);
+- TEAM_ID: the Apple team that signs the builds: P2PRC_TEAM_ID if it's set,
+  else that profile's team, else "";
+- APP_GROUP, APPLICATIONS_BUNDLE_IDS: what the apps tell UpdateKit (the
+  distributor's app group and, on a Mac, its bundle ids, comma-separated in
+  P2PRC_APPLICATIONS_BUNDLE_IDS);
+- SHARED_CLIENT_ID, SHARED_SERVICE: the shared GitHub sign-in ShakeKit
+  reports bugs with (its OAuth App's client id, and the keychain service its
+  token is kept under).
 
-A build with a team is one of the team's own: it carries the shared GitHub
-sign-in (Shireworks' docs/shared-sign-in.md: the `GitHubShared…` Info.plist
-keys and the `<team>.com.LoganShire.github` keychain group) and UpdateKit's
-app group, shared with Shireworks. A build without one carries neither;
-ShakeKit is in every build, and works only where the person is signed in to
-Shireworks on the same device (it has no sign-in of its own).
+None of them is named in this public repository: CI's distribution builds
+set them (`--repo_env`) from the repository's secrets, and a builder sets
+their own in a `.bazelrc.user` at the root (not checked in):
+
+    common --repo_env=P2PRC_TEAM_ID=<team id>
+
+A build without them carries neither UpdateKit's settings nor the shared
+sign-in (ShakeKit then does nothing), and asks for no app group.
 """
 
 BUNDLE_ID = "com.LoganShire.P2PRC"
@@ -61,16 +68,33 @@ def _ios_profile(rctx, want_team):
         return ("", "")
     return (best[1], best[2])
 
+_ENVIRONMENT = [
+    "P2PRC_TEAM_ID",
+    "P2PRC_APP_GROUP",
+    "P2PRC_APPLICATIONS_BUNDLE_IDS",
+    "P2PRC_SHARED_CLIENT_ID",
+    "P2PRC_SHARED_SERVICE",
+]
+
 def _signing_impl(rctx):
-    set_team = rctx.getenv("CONVO_TEAM_ID", "").strip()
-    name, profile_team = _ios_profile(rctx, set_team)
-    team = set_team or profile_team
+    env = {k: (rctx.getenv(k, "") or "").strip() for k in _ENVIRONMENT}
+    name, profile_team = _ios_profile(rctx, env["P2PRC_TEAM_ID"])
+    team = env["P2PRC_TEAM_ID"] or profile_team
+    ids = [i.strip() for i in env["P2PRC_APPLICATIONS_BUNDLE_IDS"].split(",") if i.strip()]
     rctx.file("BUILD.bazel", 'exports_files(["signing.bzl"])\n')
-    rctx.file("signing.bzl", "TEAM_ID = %r\nIOS_PROFILE = %r\n" % (team, name))
+    rctx.file("signing.bzl", "\n".join([
+        "TEAM_ID = %r" % team,
+        "IOS_PROFILE = %r" % name,
+        "APP_GROUP = %r" % env["P2PRC_APP_GROUP"],
+        "APPLICATIONS_BUNDLE_IDS = %r" % ids,
+        "SHARED_CLIENT_ID = %r" % env["P2PRC_SHARED_CLIENT_ID"],
+        "SHARED_SERVICE = %r" % env["P2PRC_SHARED_SERVICE"],
+        "",
+    ]))
 
 _signing = repository_rule(
     implementation = _signing_impl,
-    environ = ["CONVO_TEAM_ID", "HOME"],
+    environ = _ENVIRONMENT + ["HOME"],
     # A new profile on the machine is found on the next `bazel sync` or
     # `--repo_env` change; `bazel fetch --force @convo_signing` sooner.
     local = True,

@@ -149,9 +149,9 @@ register_toolchains(
 )
 
 # --- Signing -------------------------------------------------------------------
-# The builder's own Apple team, from CONVO_TEAM_ID in a .bazelrc.user that
-# isn't checked in (tools/signing/extension.bzl). It turns on the shared
-# GitHub sign-in and UpdateKit's app group in the team's own builds.
+# The builder's own Apple team and the distribution's settings (UpdateKit,
+# the shared GitHub sign-in), from the build's environment, never this
+# repository (tools/signing/extension.bzl).
 signing = use_extension("//tools/signing:extension.bzl", "signing")
 use_repo(signing, "convo_signing")
 

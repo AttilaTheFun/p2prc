@@ -48,7 +48,7 @@ local_provisioning_profile(
     name = "local_profile",
     # The newest development profile on this Mac for com.LoganShire.P2PRC
     # itself, found by bundle id and kind (tools/signing/extension.bzl), with
-    # its App Groups; the team from it or CONVO_TEAM_ID, never the repo.
+    # its App Groups; the team from it or P2PRC_TEAM_ID, never the repo.
     profile_name = IOS_PROFILE or "iOS Team Provisioning Profile: com.LoganShire.P2PRC",
     tags = ["manual"],
     team_id = TEAM_ID,
