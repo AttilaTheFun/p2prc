@@ -192,7 +192,7 @@ bazel_dep(name = "rules_python", version = "2.0.2")
 # rules_swift_package_manager: one graph (//third_party/swift_packages) for
 # this module's packages and Isomer's (Package.swift lists isomer by the
 # release's tag): the protocol (this repository's protocol/), Communication
-# (WebRTC for the Apple clients), AgentUI, ShakeKit, UpdateKit, build_tools
+# (WebRTC for the Apple clients), AgentUI, Shireworks Kit, build_tools
 # and swift-argument-parser. rspm generates one @swiftpkg_<name> repo each.
 bazel_dep(name = "rules_swift_package_manager", version = "1.26.0")
 
@@ -246,9 +246,8 @@ use_repo(
     "swiftpkg_build_tools",
     "swiftpkg_communication",
     "swiftpkg_protocol",
-    "swiftpkg_shake_kit",
+    "swiftpkg_shireworks_kit",
     "swiftpkg_swift_argument_parser",
-    "swiftpkg_update_kit",
 )
 
 # The generated package repositories see rules_swift_package_manager's

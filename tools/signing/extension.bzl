@@ -13,9 +13,11 @@ environment, never the repository.
 - APP_GROUP, APPLICATIONS_BUNDLE_IDS: what the apps tell UpdateKit (the
   distributor's app group and, on a Mac, its bundle ids, comma-separated in
   P2PRC_APPLICATIONS_BUNDLE_IDS);
-- SHARED_CLIENT_ID, SHARED_SERVICE: the shared GitHub sign-in ShakeKit
-  reports bugs with (its OAuth App's client id, and the keychain service its
-  token is kept under).
+- SHARED_CLIENT_ID, SHARED_SERVICE: the shared GitHub sign-in Shireworks
+  Kit reports bugs with (its OAuth App's client id, and the keychain service
+  its token is kept under);
+- SHIREWORKS_REPOSITORY: where Shireworks Kit files crash and bug reports
+  ("owner/name": CI's own repository).
 
 None of them is named in this public repository: CI's distribution builds
 set them (`--repo_env`) from the repository's secrets, and a builder sets
@@ -24,7 +26,8 @@ their own in a `.bazelrc.user` at the root (not checked in):
     common --repo_env=P2PRC_TEAM_ID=<team id>
 
 A build without them carries neither UpdateKit's settings nor the shared
-sign-in (ShakeKit then does nothing), and asks for no app group.
+sign-in, and files no reports (Shireworks Kit then only records crashes
+locally), and asks for no app group.
 """
 
 BUNDLE_ID = "com.LoganShire.P2PRC"
@@ -74,6 +77,7 @@ _ENVIRONMENT = [
     "P2PRC_APPLICATIONS_BUNDLE_IDS",
     "P2PRC_SHARED_CLIENT_ID",
     "P2PRC_SHARED_SERVICE",
+    "P2PRC_SHIREWORKS_REPOSITORY",
 ]
 
 def _signing_impl(rctx):
@@ -89,6 +93,7 @@ def _signing_impl(rctx):
         "APPLICATIONS_BUNDLE_IDS = %r" % ids,
         "SHARED_CLIENT_ID = %r" % env["P2PRC_SHARED_CLIENT_ID"],
         "SHARED_SERVICE = %r" % env["P2PRC_SHARED_SERVICE"],
+        "SHIREWORKS_REPOSITORY = %r" % env["P2PRC_SHIREWORKS_REPOSITORY"],
         "",
     ]))
 

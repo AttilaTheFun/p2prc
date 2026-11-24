@@ -1,5 +1,5 @@
 {
-  "originHash" : "9c505a5def4e341455fc47d251ca66380c99811727af1281aded84b5386c0b57",
+  "originHash" : "33ce55feb42a6aae9b0440b094960291d620f649ef151a3d6178fedb61d0180c",
   "pins" : [
     {
       "identity" : "agent_ui",
@@ -63,12 +63,20 @@
       }
     },
     {
-      "identity" : "shake_kit",
+      "identity" : "kscrash",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/shake_kit.git",
+      "location" : "https://github.com/kstenerud/KSCrash.git",
       "state" : {
-        "revision" : "8815b7dd86acd88d44a946bf2da31116208156e3",
-        "version" : "0.3.0"
+        "revision" : "c3882b4db5e810a8ed4148b79cab29a173d4c5c5",
+        "version" : "2.6.1"
+      }
+    },
+    {
+      "identity" : "shireworks_kit",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/AttilaTheFun/shireworks_kit.git",
+      "state" : {
+        "revision" : "6e61e129ca8ee4bcff16ff17ba1056deaa761928"
       }
     },
     {
@@ -293,15 +301,6 @@
       "location" : "https://github.com/migueldeicaza/SwiftTerm.git",
       "state" : {
         "revision" : "839d4fa1ffd4ea2ede5664e1c1fb13cc5771e11a"
-      }
-    },
-    {
-      "identity" : "update_kit",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/AttilaTheFun/update_kit.git",
-      "state" : {
-        "revision" : "2acaad86637246bc7297a3a999ea153a52dd9d40",
-        "version" : "0.18.0"
       }
     },
     {
