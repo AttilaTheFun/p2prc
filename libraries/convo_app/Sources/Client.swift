@@ -450,9 +450,33 @@ public final class Client {
         // The invite this identity last showed, before the address it opened with.
         ConvoServices.request({ [weak self] _, saved in
             self?.shownInviteSalt = Hash32(hex: saved)
-            ConvoServices.request({ [weak self] _, payload in self?.consumeOpeningHash(payload) }, { host.openingHash(requestID: $0) })
+            ConvoServices.request({ [weak self] _, payload in
+                guard let self else { return }
+                // A link the app was opened with (`open(url:)`) before the identity was loaded comes first.
+                let opening = self.pendingOpening ?? payload
+                self.pendingOpening = nil
+                self.consumeOpeningHash(opening)
+                self.identityReady = true
+            }, { host.openingHash(requestID: $0) })
         }, { host.load(requestID: $0, key: "inviteSalt") })
     }
+
+    /// The app was opened with a link: `p2prc://…#c=<invite>` (or `#d=` for a
+    /// device handoff), or the web client's own `https://…#c=…`. Its
+    /// fragment is taken as the web page takes its opening address; a link
+    /// with none just brings the app forward (Applications' Open). Held until
+    /// the identity is loaded when it comes first.
+    public func open(url: String) {
+        guard let marker = url.firstIndex(of: "#") else { return }
+        let fragment = String(url[marker...])
+        guard identityReady else { pendingOpening = fragment; return }
+        consumeOpeningHash(fragment)
+    }
+
+    /// A link to open once the identity is loaded (`open(url:)`).
+    private var pendingOpening: String?
+    /// Whether the identity is loaded and its opening address consumed.
+    private var identityReady = false
 
     public func setNick(_ name: String) {
         let trimmed = Self.trim(name)

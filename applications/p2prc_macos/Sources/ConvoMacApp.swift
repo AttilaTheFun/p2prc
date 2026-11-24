@@ -25,9 +25,11 @@ struct ConvoMacApp: App {
             // in when the pane crashed. The columns' minimums are the floor.
             ChatScreen()
                 .shakeToReport(repository: "AttilaTheFun/p2prc")
+                // p2prc:// (Applications' Open, an invite or handoff link).
+                .onOpenURL { Client.shared.open(url: $0.absoluteString) }
         }
         .defaultSize(width: 960, height: 640)
-        // Help › Report a Bug… (⌥⌘B): an issue in Convo's repository.
+        // Help › Report a Bug… (⌥⌘B): an issue in P2PRC's repository.
         .commands { ShakeKitCommands() }
         // Settings…, in the application menu, as every Mac app has it.
         Settings {

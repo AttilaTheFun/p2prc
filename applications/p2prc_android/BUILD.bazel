@@ -40,6 +40,9 @@ isomer_android_app(
     icon = "//artwork/app_icon:Convo-192.png",
     default_renderer = "jetpackCompose",
     label = "P2PRC",
+    # p2prc:// (Applications' Open, invite and handoff links): the launch
+    # intent's fragment is the opening hash (AppServices.kt).
+    url_scheme = "p2prc",
     package = "com.loganshire.p2prc",
     # Kept in step with the iOS and macOS Info.plist versions.
     version_name = "0.35.0",

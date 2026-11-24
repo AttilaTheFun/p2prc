@@ -239,9 +239,11 @@ struct ConvoiOSApp: App {
 
     var body: some Scene {
         WindowGroup {
-            // Shake to report a bug, as an issue in Convo's repository.
+            // Shake to report a bug, as an issue in P2PRC's repository.
             ChatScreen()
                 .shakeToReport(repository: "AttilaTheFun/p2prc")
+                // p2prc:// (Applications' Open, an invite or handoff link).
+                .onOpenURL { Client.shared.open(url: $0.absoluteString) }
         }
     }
 }
