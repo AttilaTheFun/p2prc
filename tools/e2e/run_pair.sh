@@ -9,12 +9,15 @@ HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); E=$HERE/ou
 # (driver.js's relay=1), its candidate pair in the log.
 R=""; [ "${CONVO_E2E_RELAY:-}" = 1 ] && R="&relay=1"
 A=${CONVO_E2E_SIM_A:-7FCDAC0F-C4C3-4EA6-8554-B3787574679F}; B=${CONVO_E2E_SIM_B:-8339C995-35E0-4AD8-9BEB-3311236D6958}
-log(){ echo "$(date +%T) $*" >> $E/pair.log; }
+log(){ echo "$(date -u +%T) $*" >> $E/pair.log; }
 cmd(){ echo "$2" >> $E/cmds.txt.$1; }
 # waitfor who pattern seconds: until that side's latest screen text matches.
 waitfor(){ for i in $(seq 1 $3); do sleep 1; lastof $1 'text:' | grep -qE "$2" && return 0; done; log "$1 timed out waiting for: $2"; return 1; }
 lastof(){ grep "\"who\": *\"$1\"" $E/weblog.txt 2>/dev/null | grep "$2" | tail -1 | sed -E 's/.*"m": *"//; s/"}$//'; }
-openwait(){ for t in 1 2 3 4; do xcrun simctl openurl $1 "$2" >/dev/null 2>&1; for i in $(seq 1 30); do sleep 2; grep -q "\"who\": *\"$3\",\"t\":[0-9]*,\"m\":\"text: ." $E/weblog.txt 2>/dev/null && return 0; done; log "$3 not loaded yet, reopening"; done; return 1; }
+# Each page opened once and waited for, up to 3 minutes: Safari's first load on
+# a fresh simulator can take over a minute, and opening the URL again while it
+# loads makes a second load of the page (p2prc#10).
+openwait(){ for t in 1 2; do log "$3 opening its page"; xcrun simctl openurl $1 "$2" >/dev/null 2>&1; for i in $(seq 1 90); do sleep 2; grep -q "\"who\": *\"$3\",\"t\":[0-9]*,\"m\":\"text: ." $E/weblog.txt 2>/dev/null && return 0; done; log "$3 not loaded yet, reopening"; done; return 1; }
 # Onboard after the recovery phrase: the switch, then Continue, retried until
 # the inbox shows (a cold first load can still be drawing when Continue is
 # pressed); a retry is logged with the switch's state.
