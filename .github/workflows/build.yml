@@ -107,7 +107,7 @@ env:
   ANDROID_KEY: p2prc
   # Empty until P2PRC's Android release key exists: fill in its
   # certificate's SHA-256 (alpha's warning names it once the key is set).
-  ANDROID_PIN: ""
+  ANDROID_PIN: "299886501ea68dedeefe8efc4f66323d821862d46b069a1c678fa84146c823d3"
 
 jobs:
   # --- Pull requests: every platform built, the protocol's tests ----------
