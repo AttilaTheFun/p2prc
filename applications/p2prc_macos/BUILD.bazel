@@ -1,6 +1,6 @@
 load("@build_bazel_rules_apple//apple:macos.bzl", "macos_application")
 load("@rules_swift//swift:swift.bzl", "swift_library")
-load("//tools/signing:defs.bzl", "team_plist")
+load("//tools/signing:defs.bzl", "mac_entitlements", "team_plist")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -37,11 +37,24 @@ swift_library(
 # profile that grants its keychain and app groups.
 team_plist(name = "team_info")
 
+# Its identifier, keychain groups (the shared sign-in's among them) and app
+# group, in the build CI signs alone (tools/signing).
+mac_entitlements(
+    name = "signed",
+    bundle_id = "com.LoganShire.P2PRC",
+)
+
 macos_application(
     name = "p2prc_macos",
     app_icons = ["//artwork/app_icon"],
     # One App ID for the iPhone, iPad and Mac apps.
     bundle_id = "com.LoganShire.P2PRC",
+    # P2PRC.app, in /Applications as in the Dock.
+    bundle_name = "P2PRC",
+    entitlements = select({
+        "//tools/signing:ci_package": ":signed.entitlements",
+        "//conditions:default": None,
+    }),
     infoplists = [
         "Info.plist",
         ":team_info.plist",

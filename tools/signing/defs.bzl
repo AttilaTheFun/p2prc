@@ -76,6 +76,28 @@ def team_entitlements(name, bundle_id):
     )
     write_file(name = name, out = name + ".entitlements", content = _plist(lines))
 
+def mac_entitlements(name, bundle_id):
+    """`<name>.entitlements` for the Mac app CI signs (--config=ci_device):
+    its identifier, its keychain groups (its own first, where an item goes
+    when none is named, then the shared sign-in's, which Shireworks Kit files
+    reports with) and UpdateKit's app group, named for the team. CI's signer
+    makes them its Developer ID profile's, which grants them. Only a profile
+    grants these, and macOS refuses to launch an app that claims them without
+    one, so a build signed ad hoc carries none (the app's `select`). A build
+    with no team gets an empty set, and the signer takes the profile's."""
+    lines = []
+    if TEAM_ID:
+        groups = ["\t\t<string>%s.%s</string>" % (TEAM_ID, bundle_id)]
+        if _SHARED:
+            groups.append("\t\t<string>%s.%s</string>" % (TEAM_ID, SHARED_SERVICE))
+        lines = (
+            _string("com.apple.application-identifier", "%s.%s" % (TEAM_ID, bundle_id)) +
+            ["\t<key>keychain-access-groups</key>", "\t<array>"] + groups + ["\t</array>"]
+        )
+        if APP_GROUP:
+            lines += ["\t<key>com.apple.security.application-groups</key>", "\t<array>", "\t\t<string>%s</string>" % APP_GROUP, "\t</array>"]
+    write_file(name = name, out = name + ".entitlements", content = _plist(lines))
+
 def ci_placeholder_profile(name):
     """`<name>.mobileprovision`: the profile CI's ad hoc iPhone build
     (--config=ci_device) carries, so the machine that builds needs none. It

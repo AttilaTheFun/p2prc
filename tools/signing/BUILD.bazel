@@ -7,3 +7,10 @@ package(default_visibility = ["//visibility:public"])
 
 # CI's iPhone build's profile (--config=ci_device), replaced when CI signs it.
 ci_placeholder_profile(name = "ci_placeholder_profile")
+
+# CI's packaged builds (--config=ci_device), which CI's signer signs again: the
+# Mac app claims its keychain and app groups only there.
+config_setting(
+    name = "ci_package",
+    values = {"ios_signing_cert_name": "-"},
+)
