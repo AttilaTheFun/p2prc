@@ -3,9 +3,8 @@ import AppKit
 import MessagesUI
 import ConvoApp
 import ConvoUI
-import ShakeKit
+import ShireworksKit
 import SwiftUI
-import UpdateKit
 
 /// Convo on macOS: an ordinary document-less app, like Messages — a Dock
 /// icon, one window, quit from the menu. Compiled native Swift, real
@@ -23,8 +22,12 @@ struct ConvoMacApp: App {
             // thing that makes the layout jump for a frame when the
             // inspector opens; it is also the min-size path AppKit looped
             // in when the pane crashed. The columns' minimums are the floor.
+            // Shireworks Kit: crashes and shake to report filed in the
+            // repository CI stamps (ShireworksRepository), the build told to
+            // Applications and its update sheet, in the distribution's
+            // builds (tools/signing).
             ChatScreen()
-                .shakeToReport(repository: "AttilaTheFun/p2prc")
+                .shireworks()
                 // p2prc:// (Applications' Open, an invite or handoff link).
                 .onOpenURL { Client.shared.open(url: $0.absoluteString) }
         }
@@ -35,6 +38,7 @@ struct ConvoMacApp: App {
         Settings {
             SettingsView(client: Client.shared, close: nil)
                 .frame(width: 520, height: 380)
+                .shireworks()
         }
     }
 }
@@ -44,9 +48,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let host = NativeNetwork(qr: QRStore.shared)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        // The build this is, told to Applications (in the team's own builds;
-        // without the app group it does nothing).
-        AppUpdates.start()
         // Install the host and start the client now, so the first render
         // finds a networking stack.
         ConvoNativeHost.install(host: host)

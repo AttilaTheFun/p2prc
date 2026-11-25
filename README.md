@@ -39,7 +39,7 @@ The web client is at [p2prc.org](https://p2prc.org).
   the nodes, their link relayed by TURN).
 
 Dependencies, all public: Isomer, [communication](https://github.com/AttilaTheFun/communication)
-(WebRTC for the Apple apps), AgentUI, ShakeKit and UpdateKit, through Bazel
+(WebRTC for the Apple apps), AgentUI and Shireworks Kit, through Bazel
 and rules_swift_package_manager (`third_party/swift_packages`).
 
 ## Building

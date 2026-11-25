@@ -6,10 +6,9 @@ import AppKit
 #endif
 import ConvoApp
 import ConvoUI
-import ShakeKit
+import ShireworksKit
 import SwiftUI
 import UniformTypeIdentifiers
-import UpdateKit
 import ImageIO
 #if canImport(UIKit)
 import AVFoundation
@@ -232,16 +231,16 @@ struct ConvoiOSApp: App {
         ConvoNativeHost.install(host: host)
         VideoCallPresenter.shared.install(host: host)
         DebugPairing.installIfRequested()
-        // The build this is, told to Applications (in the team's own builds;
-        // without the app group it does nothing).
-        AppUpdates.start()
     }
 
     var body: some Scene {
         WindowGroup {
-            // Shake to report a bug, as an issue in P2PRC's repository.
+            // Shireworks Kit: crashes and shake to report filed in the
+            // repository CI stamps (ShireworksRepository), the build told to
+            // Applications and its updates offered, in the distribution's
+            // builds (tools/signing).
             ChatScreen()
-                .shakeToReport(repository: "AttilaTheFun/p2prc")
+                .shireworks()
                 // p2prc:// (Applications' Open, an invite or handoff link).
                 .onOpenURL { Client.shared.open(url: $0.absoluteString) }
         }

@@ -98,6 +98,7 @@ env:
   DISTRIBUTION_SETTINGS: >-
     --repo_env=P2PRC_TEAM_ID --repo_env=P2PRC_APP_GROUP --repo_env=P2PRC_APPLICATIONS_BUNDLE_IDS
     --repo_env=P2PRC_SHARED_CLIENT_ID --repo_env=P2PRC_SHARED_SERVICE
+    --repo_env=P2PRC_SHIREWORKS_REPOSITORY
   # The apps P2PRC's builds replace (builds.json's `replaces`): Convo's,
   # on each platform.
   REPLACES: >-
@@ -379,6 +380,8 @@ jobs:
           P2PRC_APPLICATIONS_BUNDLE_IDS: ${{ secrets.P2PRC_APPLICATIONS_BUNDLE_IDS }}
           P2PRC_SHARED_CLIENT_ID: ${{ secrets.P2PRC_SHARED_CLIENT_ID }}
           P2PRC_SHARED_SERVICE: ${{ secrets.P2PRC_SHARED_SERVICE }}
+          # Where Shireworks Kit files the app's crash and bug reports: this repository.
+          P2PRC_SHIREWORKS_REPOSITORY: ${{ github.repository }}
         run: exec tools/ci/container_build.sh package .ci/packages $DISTRIBUTION_SETTINGS $PUBLISHED_APPLE
       - uses: actions/upload-artifact@v4
         with:

@@ -1,8 +1,9 @@
 """The Info.plist keys and entitlements only the distribution's builds carry.
 
 Their values come from the build's environment (extension.bzl), never this
-repository: UpdateKit's app group and the Applications bundle ids, and the
-shared GitHub sign-in ShakeKit reports bugs with. Each key is written only
+repository: Shireworks Kit's repository for reports, UpdateKit's app group
+and the Applications bundle ids, and the shared GitHub sign-in reports are
+filed with. Each key is written only
 when its values are set; a build without them gets an empty plist and the
 entitlements the app always has.
 """
@@ -14,6 +15,7 @@ load(
     "APP_GROUP",
     "SHARED_CLIENT_ID",
     "SHARED_SERVICE",
+    "SHIREWORKS_REPOSITORY",
     "TEAM_ID",
 )
 
@@ -38,6 +40,8 @@ def team_plist(name):
     bundle ids) and the shared sign-in's keys, where the build has them;
     empty otherwise. Merged with the app's own Info.plist."""
     lines = []
+    if SHIREWORKS_REPOSITORY:
+        lines += _string("ShireworksRepository", SHIREWORKS_REPOSITORY)
     if _SHARED:
         lines += (
             _string("GitHubSharedClientID", SHARED_CLIENT_ID) +
