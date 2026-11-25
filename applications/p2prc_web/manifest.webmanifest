@@ -1,6 +1,6 @@
 {
-  "name": "Convo",
-  "short_name": "Convo",
+  "name": "P2PRC",
+  "short_name": "P2PRC",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
