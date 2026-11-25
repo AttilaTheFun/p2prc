@@ -11,13 +11,18 @@
   try { sessionStorage.setItem('e2e-loads', String(loads)); } catch (e) {}
   const nav = (performance.getEntriesByType('navigation')[0] || {}).type || '?';
   const memories = [];
+  // A memory the page makes itself (WASI hosts import theirs) as well as one
+  // an instance exports.
+  const NativeMemory = WebAssembly.Memory;
+  WebAssembly.Memory = function(...args) { const m = new NativeMemory(...args); memories.push(m); return m; };
+  WebAssembly.Memory.prototype = NativeMemory.prototype;
   for (const name of ['instantiate', 'instantiateStreaming']) {
     const original = WebAssembly[name];
     if (!original) continue;
     WebAssembly[name] = async function(...args) {
       const result = await original.apply(this, args);
       const exports = (result.instance || result).exports || {};
-      for (const value of Object.values(exports)) if (value instanceof WebAssembly.Memory) memories.push(value);
+      for (const value of Object.values(exports)) if (value instanceof NativeMemory && !memories.includes(value)) memories.push(value);
       return result;
     };
   }
