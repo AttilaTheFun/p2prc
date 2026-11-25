@@ -23,6 +23,9 @@ openwait(){ for t in 1 2 3 4; do xcrun simctl openurl $1 "$2" >/dev/null 2>&1; f
 # Onboarding creates it again when it finds the first page back (Safari can
 # reload a tab in the simulator, losing the identity not yet saved).
 create(){ waitfor $1 'Create a new identity' 60; for t in 1 2 3 4; do cmd $1 'text:Create a new identity'; waitfor $1 'Your recovery phrase' 15 && return 0; log "$1 create retry $t"; done; return 1; }
+# Back into the conversation, if the page has gone to the inbox (it reloads at
+# times and starts there): its row tapped until the thread is drawn.
+inthread(){ for t in 1 2 3; do lastof $1 'text:' | grep -q '^text: peer-' && return 0; log "$1 at the inbox: opening the conversation again"; cmd $1 'row'; waitfor $1 '^text: peer-' 8 && return 0; done; return 1; }
 onboard(){ for t in 1 2 3 4; do if lastof $1 'text:' | grep -q 'Create a new identity'; then log "$1 back at the start (the page reloaded): creating again"; create $1; sleep 2; fi; cmd $1 'toggled'; sleep 2; lastof $1 '"m":"toggled ' | grep -q 'toggled true' || cmd $1 'toggle'; sleep 2; cmd $1 'text:Continue'; waitfor $1 "$2" 20 && return 0; log "$1 onboarding retry $t (switch: $(lastof $1 '"m":"toggled ' | sed 's/.*toggled //'))"; done; return 1; }
 # The built site, by the execution root (CI's Bazel makes no bazel-out link in the checkout).
 W=$(cd "$ROOT" && echo "$(bazel info execution_root 2>/dev/null)/$(bazel cquery --output=files //applications/p2prc_web 2>/dev/null | head -1)")
@@ -35,8 +38,13 @@ for D in $A $B; do xcrun simctl bootstatus $D -b >/dev/null 2>&1; done; log "sim
 openwait $A "http://127.0.0.1:8765/index.html?who=a$R" a
 create a; sleep 2; onboard a 'Inbox|No conversations'
 waitfor a 'Inbox|No conversations' 60
-for try in 1 2 3 4; do cmd a 'aria:New Conversation'; waitfor a 'Show a Pairing Code' 8 && break; done; cmd a 'text:Show a Pairing Code'
-waitfor a 'Scan the code|have them scan' 60; sleep 2; cmd a 'hash'; sleep 3
+# The pairing code: New Conversation, then Show a Pairing Code, each tapped
+# again until its screen shows (a tap can land before the view takes it).
+for code in 1 2 3; do
+  for try in 1 2 3 4; do lastof a 'text:' | grep -q 'Show a Pairing Code' && break; cmd a 'aria:New Conversation'; waitfor a 'Show a Pairing Code' 8 && break; done
+  cmd a 'text:Show a Pairing Code'; waitfor a 'Scan the code|have them scan' 30 && break; log "a pairing code retry $code: $(lastof a 'text:' | cut -c1-80)"
+done
+sleep 2; cmd a 'hash'; sleep 3
 H=$(lastof a 'hash #c=' | sed 's/.*hash //'); log "invite ${H:0:30}"
 openwait $B "http://127.0.0.1:8765/index.html?who=b$R$H" b
 create b; sleep 2; onboard b 'Skip|peer-|Pair|Name'
@@ -44,11 +52,11 @@ waitfor b 'Skip|peer-' 120; cmd b 'text:Skip'
 waitfor a 'Skip|peer-' 120; cmd a 'text:Skip'
 waitfor b 'peer-' 60; cmd b 'row'; waitfor b 'Message|Say something' 30; cmd b 'type:hello from b'; sleep 2; cmd b 'send'
 waitfor a 'hello from b' 60; cmd a 'row'; waitfor a 'text: peer-' 30; cmd a 'type:hello from a'; sleep 2; cmd a 'send'
-waitfor b 'hello from a' 60
+waitfor b 'hello from a' 60; inthread b; waitfor b '^text: peer-.*hello from a' 30
 xcrun simctl io $B screenshot --mask=black $E/web_composer_b.png >/dev/null 2>&1
 log "a thread: $(lastof a 'text:')"; log "b thread: $(lastof b 'text:')"
 for try in 1 2 3; do cmd a 'aria:Back'; waitfor a 'Inbox' 8 && break; done; log "a inbox: $(lastof a 'text:')"; for try in 1 2 3; do cmd a 'row'; waitfor a 'text: peer-' 8 && break; done; log "a reopened: $(lastof a 'text:')"
-cmd b 'type:after reopen'; sleep 2; cmd b 'send'; waitfor a 'after reopen' 60; log "a after reopen: $(lastof a 'text:')"
+inthread b; cmd b 'type:after reopen'; sleep 2; cmd b 'send'; waitfor a 'after reopen' 60; log "a after reopen: $(lastof a 'text:')"
 cmd a "js:(()=>{const v=visualViewport,se=document.scrollingElement,ta=document.querySelector('textarea').getBoundingClientRect();const bs=[...document.querySelectorAll('body *')].filter(e=>/after reopen/.test(e.textContent||'')&&!e.children.length);const lb=bs.length?bs[bs.length-1].getBoundingClientRect():null;const vars=[...document.querySelectorAll('[style*=\"--\"]')].map(e=>e.getAttribute('style').match(/--[^;]+/g).join(',')).join(' / ');return JSON.stringify({sy:scrollY,ih:innerHeight,vh:v.height,vt:v.offsetTop,sh:se.scrollHeight,ch:se.clientHeight,ta:[ta.top,ta.bottom],last:lb&&[lb.top,lb.bottom],vars})})()"; sleep 3; log "probe: $(lastof a 'js ')"
 xcrun simctl io $A screenshot --mask=black $E/web_thread.png >/dev/null 2>&1
 # The peer link can take a retry to come up (the app reconnects after a failed attempt): give it a while before
