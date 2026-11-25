@@ -38,8 +38,13 @@ for D in $A $B; do xcrun simctl bootstatus $D -b >/dev/null 2>&1; done; log "sim
 openwait $A "http://127.0.0.1:8765/index.html?who=a$R" a
 create a; sleep 2; onboard a 'Inbox|No conversations'
 waitfor a 'Inbox|No conversations' 60
-for try in 1 2 3 4; do cmd a 'aria:New Conversation'; waitfor a 'Show a Pairing Code' 8 && break; done; cmd a 'text:Show a Pairing Code'
-waitfor a 'Scan the code|have them scan' 60; sleep 2; cmd a 'hash'; sleep 3
+# The pairing code: New Conversation, then Show a Pairing Code, each tapped
+# again until its screen shows (a tap can land before the view takes it).
+for code in 1 2 3; do
+  for try in 1 2 3 4; do lastof a 'text:' | grep -q 'Show a Pairing Code' && break; cmd a 'aria:New Conversation'; waitfor a 'Show a Pairing Code' 8 && break; done
+  cmd a 'text:Show a Pairing Code'; waitfor a 'Scan the code|have them scan' 30 && break; log "a pairing code retry $code: $(lastof a 'text:' | cut -c1-80)"
+done
+sleep 2; cmd a 'hash'; sleep 3
 H=$(lastof a 'hash #c=' | sed 's/.*hash //'); log "invite ${H:0:30}"
 openwait $B "http://127.0.0.1:8765/index.html?who=b$R$H" b
 create b; sleep 2; onboard b 'Skip|peer-|Pair|Name'
