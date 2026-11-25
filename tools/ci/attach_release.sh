@@ -52,6 +52,39 @@ gh_retry() {
   return 1
 }
 
+# The name an asset has now, empty when it's gone (404): a retried DELETE or PATCH
+# asks first, since a call GitHub carried out can still be answered with a
+# 5xx, and the same call again would then fail (a 404, a name taken).
+# "?" when GitHub can't say (another 5xx): neither gone nor renamed, so tried again.
+asset_name() {
+  local answer
+  if answer="$(gh api "repos/$repo/releases/assets/$1" --jq .name 2>&1)"; then
+    echo "$answer"
+  else
+    case "$answer" in *"HTTP 404"*) ;; *) echo "?" ;; esac
+  fi
+}
+
+delete_asset() {
+  local try
+  for try in 1 2 3 4 5; do
+    gh api -X DELETE "repos/$repo/releases/assets/$1" > /dev/null 2>&1 && return 0
+    [ -n "$(asset_name "$1")" ] || return 0
+    [ "$try" = 5 ] || { echo "attach_release: retrying the delete of asset $1 ($try)" >&2; sleep $((try * 10)); }
+  done
+  return 1
+}
+
+rename_asset() {
+  local try
+  for try in 1 2 3 4 5; do
+    gh api -X PATCH "repos/$repo/releases/assets/$1" -f name="$2" > /dev/null 2>&1 && return 0
+    [ "$(asset_name "$1")" != "$2" ] || return 0
+    [ "$try" = 5 ] || { echo "attach_release: retrying the rename of asset $1 to $2 ($try)" >&2; sleep $((try * 10)); }
+  done
+  return 1
+}
+
 attach() {
   local file="$1" name type existing staged staged_id status try
   name="$(basename "$file")"
@@ -67,7 +100,7 @@ attach() {
     [ "$status" = 201 ] && break
     # A failed upload can leave a half-made asset of that name behind.
     existing="$(gh api "repos/$repo/releases/$release/assets?per_page=100" --jq ".[] | select(.name == \"$staged\") | .id" || true)"
-    [ -z "$existing" ] || gh api -X DELETE "repos/$repo/releases/assets/$existing" > /dev/null || true
+    [ -z "$existing" ] || delete_asset "$existing" || true
     case "$status" in 000 | 5*) [ "$try" = 5 ] || { echo "attach_release: $name upload answered $status, retrying" >&2; sleep $((try * 10)); continue; } ;; esac
     echo "attach_release: $name was not attached ($status): $(head -c 300 "$work/answer" 2> /dev/null)" >&2
     exit 1
@@ -75,8 +108,8 @@ attach() {
   [ "$status" = 201 ] || { echo "attach_release: $name was not attached ($status)" >&2; exit 1; }
   staged_id="$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1]))["id"])' "$work/answer")"
   existing="$(gh_retry gh api "repos/$repo/releases/$release/assets?per_page=100" --jq ".[] | select(.name == \"$name\") | .id")"
-  [ -z "$existing" ] || gh_retry gh api -X DELETE "repos/$repo/releases/assets/$existing" > /dev/null
-  gh_retry gh api -X PATCH "repos/$repo/releases/assets/$staged_id" -f name="$name" > /dev/null
+  [ -z "$existing" ] || delete_asset "$existing" || { echo "attach_release: the old $name (asset $existing) was not deleted" >&2; exit 1; }
+  rename_asset "$staged_id" "$name" || { echo "attach_release: $staged was not renamed $name" >&2; exit 1; }
   echo "attach_release: $name attached to $tag"
 }
 
