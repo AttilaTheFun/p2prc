@@ -2,6 +2,35 @@
   const who = new URLSearchParams(location.search).get("who") || "a";
   const send=(m)=>{try{navigator.sendBeacon('/log', JSON.stringify({who, t:Date.now(), m:String(m).slice(0,3000)}));}catch(e){}};
   window.addEventListener('error',e=>send('error: '+(e.message||e)));
+  // The page's life (p2prc#10: the web client reloads in iOS Safari): each
+  // load, numbered within the tab (sessionStorage survives a reload, not a
+  // new tab) with how it was navigated to; the page hidden, shown or frozen;
+  // and the WebAssembly memory's size, every 15 s and at each change of
+  // state, so a run that reloads shows what came before it.
+  const loads = (+(sessionStorage.getItem('e2e-loads') || 0)) + 1;
+  try { sessionStorage.setItem('e2e-loads', String(loads)); } catch (e) {}
+  const nav = (performance.getEntriesByType('navigation')[0] || {}).type || '?';
+  const memories = [];
+  for (const name of ['instantiate', 'instantiateStreaming']) {
+    const original = WebAssembly[name];
+    if (!original) continue;
+    WebAssembly[name] = async function(...args) {
+      const result = await original.apply(this, args);
+      const exports = (result.instance || result).exports || {};
+      for (const value of Object.values(exports)) if (value instanceof WebAssembly.Memory) memories.push(value);
+      return result;
+    };
+  }
+  const mb = () => memories.length ? memories.map(m => (m.buffer.byteLength / 1048576).toFixed(0) + 'MB').join('+') : '-';
+  const life = (what) => send('life ' + what + ' load ' + loads + ' wasm ' + mb());
+  life('start ' + nav);
+  window.addEventListener('pagehide', e => life('pagehide persisted=' + e.persisted));
+  window.addEventListener('pageshow', e => life('pageshow persisted=' + e.persisted));
+  document.addEventListener('visibilitychange', () => life('visibility ' + document.visibilityState));
+  document.addEventListener('freeze', () => life('freeze'));
+  document.addEventListener('resume', () => life('resume'));
+  window.addEventListener('unhandledrejection', e => send('rejection: ' + ((e.reason && (e.reason.stack || e.reason.message)) || e.reason)));
+  setInterval(() => life('tick'), 15000);
   // ?relay=1: every peer connection relayed through TURN only (no host or
   // STUN path), and each connected one's chosen candidate pair logged as
   // "ice <state> <local type>/<remote type> <protocol>", so a run proves the

@@ -64,5 +64,10 @@ xcrun simctl io $A screenshot --mask=black $E/web_thread.png >/dev/null 2>&1
 if [ -n "$R" ]; then for i in $(seq 1 45); do lastof a '"m":"ice ' | grep -q 'ice connected' && lastof b '"m":"ice ' | grep -q 'ice connected' && break; sleep 1; done; fi
 log "ice a: $(lastof a '"m":"ice ' | sed 's/.*"m":"//; s/"}$//')"; log "ice b: $(lastof b '"m":"ice ' | sed 's/.*"m":"//; s/"}$//')"
 log "traps: $(grep -c 'Fatal error' $E/weblog.txt)"
+# Each page's loads (p2prc#10): more than one is a reload, with the WebAssembly
+# memory before it; and what the simulator's log says of WebKit's web
+# content processes ending (jetsam, a crash) in the run.
+for w in a b; do log "loads $w: $(grep "\"who\": *\"$w\"" $E/weblog.txt | grep -c '"m": *"life start') ($(grep "\"who\": *\"$w\"" $E/weblog.txt | grep -o '"m": *"life start[^"]*' | sed 's/.*life start //' | tr '\n' ',' ))"; done
+for s in $A $B; do xcrun simctl spawn $s log show --style compact --last 60m --predicate 'eventMessage CONTAINS[c] "WebContent" OR eventMessage CONTAINS[c] "jetsam" OR process == "com.apple.WebKit.WebContent"' 2>/dev/null | grep -iE 'jetsam|terminat|crash|exited|memory limit|killed' | tail -20 > $E/webkit_$s.txt; log "webkit ${s:0:8}: $(wc -l < $E/webkit_$s.txt | tr -d ' ') lines of web content ending"; done
 log done
 pkill -f cmdserver.py; xcrun simctl shutdown $A >/dev/null 2>&1; xcrun simctl shutdown $B >/dev/null 2>&1; log "sims down"
