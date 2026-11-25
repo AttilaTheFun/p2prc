@@ -29,8 +29,8 @@
 #   The workflow hands the key to every job on GitHub's runners, before a
 #   merge and after it (the owner, 2026-11-23): each reads and writes. A
 #   fork's pull request gets no secrets from GitHub, so it builds on
-#   GitHub's cache alone. main's builds (a push to main: populate)
-#   and the release jobs (alpha and alpha-apple on main, a published
+#   GitHub's cache alone. main's builds (a push to main: populate; the
+#   nightly populate-apple, scheduled or run by hand) and the release jobs (alpha and alpha-apple on main, a published
 #   release's) download every output, so the disk cache GitHub's cache
 #   keeps (above) stays whole for the runs with no key; the others download
 #   only the top-level outputs (Bazel's default, the files the jobs copy and
@@ -100,7 +100,7 @@ setup)
             push:refs/heads/main | release:*) whole=1 reviewed=1 ;;
             workflow_dispatch:refs/heads/main | schedule:refs/heads/main)
                 reviewed=1
-                case "${GITHUB_JOB:-}" in alpha | alpha-apple) whole=1 ;; esac ;;
+                case "${GITHUB_JOB:-}" in alpha | alpha-apple | populate-apple) whole=1 ;; esac ;;
         esac
         instance="p2prc"
         if [ $reviewed -eq 0 ]; then instance="p2prc-unreviewed"; fi

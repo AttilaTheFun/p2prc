@@ -20,8 +20,11 @@
 # - pull requests: container (the web and Android apps, CI's tools, and the
 #   protocol's tests) and container-apple (the iPhone and the Mac): the
 #   required checks. A newer push cancels its run.
-# - main's commits: populate, populate-apple (the same, and what a release
-#   builds, into the caches; never a proof).
+# - main's commits: populate (the web and Android, and what a release
+#   builds, into the caches; never a proof). The Apple apps' populate-apple
+#   runs nightly (schedule, 06:00Z) or by hand (`run: populate`), not on
+#   every push: GitHub's macOS runners are shared by every public
+#   repository, and a push's populate held one for hours.
 # - by hand (`run:`): verify (the builds and the protocol's tests, no
 #   proof: verify, verify-apple); proof (the end-to-end run alone, on an
 #   `xcode-27` Mac: two simulators open the web client in Safari, pair and
@@ -60,12 +63,16 @@ on:
   pull_request:
   release:
     types: [published]
+  # populate-apple: the Apple apps into the caches, nightly, so main's pushes
+  # don't hold one of the macOS runners every public repository shares.
+  schedule:
+    - cron: "0 6 * * *"
   workflow_dispatch:
     inputs:
       run:
-        description: "What to run: verify (the builds and tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the end-to-end proof alone)"
+        description: "What to run: verify (the builds and tests, no proof), prerelease or release on main (verify on a branch to bisect); proof (the end-to-end proof alone); populate (the Apple apps into the caches, as the nightly run)"
         type: choice
-        options: [verify, proof, prerelease, release]
+        options: [verify, proof, prerelease, release, populate]
         default: verify
 # A pull request's newer push (a rebase, an update with main) cancels its
 # branch's older run, whose result no longer counts. Every other run
@@ -210,7 +217,7 @@ jobs:
           retention-days: 1
 
   populate-apple:
-    if: github.event_name == 'push'
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate')
     runs-on: xcode-27
     timeout-minutes: 180
     env:
