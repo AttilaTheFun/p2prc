@@ -25,9 +25,10 @@ let package = Package(
             revision: "029de5185bf1b9dbcbac59ea06d3484a305c3505"
         ),
         // Shireworks Kit: crash and bug reports (shake, or Help › Report a
-        // Bug… on a Mac) and the update sheet; the Apple apps only. By
-        // revision until its 0.1.0 is tagged.
-        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", revision: "6e61e129ca8ee4bcff16ff17ba1056deaa761928"),
+        // Bug… on a Mac) and the update sheet; the Apple apps only.
+        // A crash in this public repository is filed without its reason or
+        // breadcrumbs (0.1.0).
+        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", exact: "0.1.0"),
         // Arguments for the repo's own tools (tools/convo_ci).
         .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
         // build_tools: CI's shared tools (`sign`, for the Apple and Android
