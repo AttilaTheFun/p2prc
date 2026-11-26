@@ -45,7 +45,7 @@ isomer_android_app(
     url_scheme = "p2prc",
     package = "com.loganshire.p2prc",
     # Kept in step with the iOS and macOS Info.plist versions.
-    version_name = "0.2.0",
+    version_name = "0.3.0",
     version_code = 1,
     # ACCESS_NETWORK_STATE: libwebrtc's NetworkMonitor queries connectivity on
     # its network thread; without it the SecurityException aborts the process.

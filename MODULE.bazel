@@ -11,7 +11,7 @@ AttilaTheFun/playground takes it. Every dependency here is public.
 
 module(
     name = "convo",
-    version = "0.2.0",
+    version = "0.3.0",
 )
 
 # --- isomer: SwiftUI compiled to wasm and Android, so the same client code
