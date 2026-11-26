@@ -65,11 +65,12 @@ public struct ChatScreen: View {
             get: {
                 if draftActive { return Self.draftID }
                 if selectedContact == Self.draftID { return client.lastPairedContact }
-                return selectedContact ?? client.debugOpenContact
+                return selectedContact ?? client.debugOpenContact ?? client.restoredContact
                     ?? (compact ? nil : client.conversations.first?.contactID)
             },
             set: { picked in
                 if picked != Self.draftID, draftActive { client.cancelPairing() }
+                client.restoredContact = nil
                 selectedContact = picked
                 client.openContact = picked == Self.draftID ? nil : picked
             }
@@ -151,6 +152,11 @@ public struct ChatScreen: View {
                 selectedContact = Self.draftID
                 compactColumn = .detail
             }
+        }
+        // The conversation open before the page reloaded: a phone goes
+        // back into it, as it was, rather than to the inbox (p2prc#10).
+        .onChange(of: client.restoredContact) { restored in
+            if restored != nil, selectedContact == nil, !draftActive { compactColumn = .detail }
         }
         // Settings is a sheet where there is no menu bar; the Mac app
         // offers it from its application menu instead.
