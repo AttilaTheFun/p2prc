@@ -74,6 +74,38 @@ other two. CPU per request: the routing Worker 0.75 ms at the median and
 2 ms at p99; the Durable Objects 1.8 ms at the median, 18 ms at p90 and
 30 ms at the most (a cold start or a commit), with no errors.
 
+### Deploying them from CI (planned)
+
+The p2prc nodes are deployed from CI, never from a machine where someone is
+logged in to wrangler. The job isn't in the workflow yet: it's added, with
+its secret, the first time a node change needs deploying. The plan:
+
+- **A Cloudflare API token for these Workers alone.** Logan makes it in the
+  account that holds them, with *Workers Scripts: Edit* on that account and
+  *Workers Routes: Edit* on the p2prc.org zone (for the custom domains), and
+  nothing else: no DNS, no other zone, no other product. Its account id
+  goes with it.
+- **Kept as a GitHub environment secret.** A `nodes` environment holds
+  `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`. It's limited to `main`,
+  with Logan as its required reviewer, so each deploy waits for his OK.
+  Only the deploy job names that environment, so no other job (and no
+  pull request's run) can read the token.
+- **A dispatch-only job.** It's `deploy-nodes` in its own workflow
+  (`.github/workflows/nodes.yml`), on `workflow_dispatch` alone, with an
+  input naming which nodes (`node-1`, `node-2`, `node-3` or `all`). It runs
+  on GitHub's Ubuntu runner in Swift's image, pinned by digest as the build
+  is. It:
+  1. builds `convo_node_worker.wasm` with the WebAssembly SDK;
+  2. runs the protocol's tests;
+  3. runs `npx wrangler@<pinned> deploy` once per node, with the flags in
+     the block above (the token reaches only this step's environment);
+  4. checks each node's `/health` afterwards.
+- **Secrets the nodes use** (`CLOUDFLARE_TURN_KEY_ID` and
+  `CLOUDFLARE_TURN_API_TOKEN`) stay as Worker secrets in Cloudflare. They're
+  set once and kept across deploys, so the job never handles them.
+- A deploy is a pull request's change, merged, then the job run by hand on
+  `main`. Its run's log names the deployed commit and each Worker's version.
+
 ## The reactor's interface
 
 `Sources/convo_node_worker/Reactor.swift` exports C functions that take and
