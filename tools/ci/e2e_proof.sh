@@ -33,25 +33,32 @@ r = max((x for x in json.load(sys.stdin)["runtimes"] if x["platform"] == "iOS" a
         key=lambda x: len(x.get("supportedDeviceTypes", [])))
 print(r["identifier"], next(d["identifier"] for d in r["supportedDeviceTypes"] if d["productFamily"] == "iPhone"))')" || exit
 echo "e2e_proof: two $device on $runtime"
-a="$(xcrun simctl create p2prc-e2e-a "$device" "$runtime")" || exit
-b="$(xcrun simctl create p2prc-e2e-b "$device" "$runtime")" || exit
+# Every simctl call and the run itself under a time limit (perl's alarm:
+# macOS has no timeout(1)), so a simulator that hangs fails the proof in
+# minutes rather than holding the runner until the job's timeout.
+limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+a="$(limit 180 xcrun simctl create p2prc-e2e-a "$device" "$runtime")" || exit
+b="$(limit 180 xcrun simctl create p2prc-e2e-b "$device" "$runtime")" || exit
+echo "e2e_proof: made $a and $b"
 # run_pair.sh erases and boots them; the status bar is set once each is up.
 (
     for sim in "$a" "$b"; do
-        for _ in $(seq 1 120); do xcrun simctl bootstatus "$sim" > /dev/null 2>&1 && break; sleep 2; done
-        xcrun simctl status_bar "$sim" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
+        for _ in $(seq 1 120); do limit 20 xcrun simctl bootstatus "$sim" > /dev/null 2>&1 && break; sleep 2; done
+        limit 60 xcrun simctl status_bar "$sim" override --time 9:41 --dataNetwork wifi --wifiMode active --wifiBars 3 \
             --cellularMode active --cellularBars 4 --operatorName "" --batteryState charged --batteryLevel 100
     done
 ) &
-CONVO_E2E_RELAY=1 CONVO_E2E_SIM_A="$a" CONVO_E2E_SIM_B="$b" bash tools/e2e/run_pair.sh
+# The run: 40 minutes at most (a passing one takes under 10).
+CONVO_E2E_RELAY=1 CONVO_E2E_SIM_A="$a" CONVO_E2E_SIM_B="$b" limit 2400 bash tools/e2e/run_pair.sh
 status=$?
+[ "$status" -ne 142 ] || { echo "e2e_proof: the run took more than 40 minutes and was stopped"; pkill -f cmdserver.py; limit 60 xcrun simctl shutdown "$a"; limit 60 xcrun simctl shutdown "$b"; }
 wait
 cp tools/e2e/out/pair.log "$run/pair.log"
 # Masked by run_pair.sh (--mask=black): a fresh simulator draws the Dynamic
 # Island and another doesn't.
 [ ! -f tools/e2e/out/web_thread.png ] || cp tools/e2e/out/web_thread.png "$run/ios-web-thread.png"
 [ ! -f tools/e2e/out/web_composer_b.png ] || cp tools/e2e/out/web_composer_b.png "$run/ios-web-composer.png"
-xcrun simctl delete "$a" "$b"
+limit 120 xcrun simctl delete "$a" "$b"
 cat "$run/pair.log"
 version="${PROOF_VERSION:-$(awk '/<key>CFBundleShortVersionString<\/key>/ { found = 1 }
     found && match($0, /<string>[^<]*<\/string>/) { print substr($0, RSTART + 8, RLENGTH - 17); exit }' applications/p2prc_ios/Info.plist)}"

@@ -128,7 +128,7 @@ public final class Client {
     /// The release, as the tag names it (v0.15): shown in Settings on every
     /// platform. Keep in step with the iOS and macOS Info.plist and the
     /// Android version_name.
-    public static let version = "0.1.0"
+    public static let version = "0.2.0"
 
     public struct Message: Identifiable, Equatable, Codable {
         public let id: String

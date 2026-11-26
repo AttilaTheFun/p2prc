@@ -33,8 +33,21 @@ rm -rf $E/site && cp -R "$W" $E/site && chmod -R u+w $E/site && cp $HERE/driver.
 python3 -c "
 p='$E/site/index.html'; s=open(p).read(); open(p,'w').write(s.replace('<head>','<head><script src=\"/driver.js\"></script>',1))"
 pkill -f cmdserver.py; rm -f $E/cmds.txt.* $E/weblog.txt $E/pair.log; (cd $E/site && nohup python3 $HERE/cmdserver.py 8765 $E/weblog.txt $E/cmds.txt >/dev/null 2>&1 &)
-for D in $A $B; do xcrun simctl shutdown $D >/dev/null 2>&1; xcrun simctl erase $D; xcrun simctl boot $D; done
-for D in $A $B; do xcrun simctl bootstatus $D -b >/dev/null 2>&1; done; log "sims up"
+# Each simulator erased and booted under a time limit, and booted once more
+# if it isn't up in 5 minutes: a boot that fails leaves `bootstatus -b`
+# waiting for ever (a release's proof hung there until the job's timeout).
+limit(){ perl -e 'alarm shift; exec @ARGV' "$@"; }
+up(){ limit 300 xcrun simctl bootstatus $1 -b >/dev/null 2>&1; }
+for D in $A $B; do
+  log "${D:0:8} erasing and booting"; echo "run_pair: ${D:0:8} erasing and booting" >&2
+  limit 60 xcrun simctl shutdown $D >/dev/null 2>&1; limit 180 xcrun simctl erase $D; limit 120 xcrun simctl boot $D
+done
+for D in $A $B; do
+  up $D && continue
+  log "${D:0:8} not up after 5 minutes: booting it again"; echo "run_pair: ${D:0:8} not up, booting again" >&2
+  limit 60 xcrun simctl shutdown $D >/dev/null 2>&1; limit 120 xcrun simctl boot $D; up $D || { log "${D:0:8} did not boot"; exit 1; }
+done
+log "sims up"; echo "run_pair: sims up" >&2
 openwait $A "http://127.0.0.1:8765/index.html?who=a$R" a
 create a; sleep 2; onboard a 'Inbox|No conversations'
 waitfor a 'Inbox|No conversations' 60
