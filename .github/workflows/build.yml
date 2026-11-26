@@ -18,8 +18,12 @@
 # request, which GitHub gives no secrets, builds on GitHub's cache alone.
 #
 # - pull requests: container (the web and Android apps, CI's tools, and the
-#   protocol's tests) and container-apple (the iPhone and the Mac): the
-#   required checks. A newer push cancels its run.
+#   protocol's tests): the required check. A newer push cancels its run.
+#   The Apple apps aren't built for a pull request (the owner's rule for
+#   public repositories, 2026-11-13: GitHub's shared macOS runners are the
+#   bottleneck): they're built nightly (populate-apple, which opens an issue
+#   when main's are broken), by hand (`run: verify`) and at release
+#   (verify-apple, alpha-apple).
 # - main's commits: populate (the web and Android, and what a release
 #   builds, into the caches; never a proof). The Apple apps' populate-apple
 #   runs nightly (schedule, 06:00Z) or by hand (`run: populate`), not on
@@ -156,21 +160,6 @@ jobs:
           path: ${{ runner.temp }}/execution-logs
           retention-days: 1
 
-  container-apple:
-    if: github.event_name == 'pull_request'
-    runs-on: xcode-27
-    timeout-minutes: 180
-    env:
-      ISOMER_PLATFORMS: apple
-    steps:
-      - uses: actions/checkout@v5
-      - uses: ./.github/actions/bazel_cache
-        with:
-          group: apple
-          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
-      - name: The iPhone and Mac apps built, with this Mac's Xcode
-        run: exec tools/ci/container_build.sh pr
-
   # --- main: the merged tree built into the caches ------------------------
 
   populate:
@@ -220,6 +209,10 @@ jobs:
     if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate')
     runs-on: xcode-27
     timeout-minutes: 180
+    permissions:
+      contents: read
+      # The issue a broken main opens (its last step).
+      issues: write
     env:
       ISOMER_PLATFORMS: apple
     steps:
@@ -241,6 +234,19 @@ jobs:
           group: apple
           gigabytes: 3
           repository-hit: ${{ steps.cache.outputs.repository-hit }}
+      # A broken main, seen at night: an issue says so, with the run (one
+      # issue, commented on again while it stays open).
+      - name: A broken main, reported
+        if: failure() && github.event_name == 'schedule'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Nightly Apple build failed on main"
+          body="The nightly Apple build (populate-apple) failed on main at $GITHUB_SHA: $RUN_URL"
+          open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
+          if [ -n "$open" ]; then gh issue comment "$open" --repo "$GITHUB_REPOSITORY" --body "$body"
+          else gh issue create --repo "$GITHUB_REPOSITORY" --title "$title" --body "$body"; fi
 
   # --- By hand: verify (the builds and the tests, no proof) ---------------
 
