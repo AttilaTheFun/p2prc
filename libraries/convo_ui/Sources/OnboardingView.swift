@@ -60,7 +60,7 @@ struct OnboardingView: View {
                     Button("Continue") { _ = client.importIdentity(phrase: phrase.joined(separator: " ")) }
                         .prominentButton()
                         .disabled(!saved)
-                    Button("Back") { mode = .choose; saved = false }
+                    Button("Back") { client.cancelIdentityPreview(); mode = .choose; saved = false }
                         .secondaryButton()
                 case .importing:
                     Text("Import an identity").font(.title2.weight(.semibold))
@@ -79,6 +79,16 @@ struct OnboardingView: View {
             .frame(maxWidth: 480)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // The phrase shown before the page reloaded, back where it was.
+        .onAppear { resumePreview() }
+        .onChange(of: client.previewPhrase) { _ in resumePreview() }
+    }
+
+    private func resumePreview() {
+        guard mode == .choose, !client.previewPhrase.isEmpty else { return }
+        phrase = client.previewPhrase
+        copied = false
+        mode = .created
     }
 }
 

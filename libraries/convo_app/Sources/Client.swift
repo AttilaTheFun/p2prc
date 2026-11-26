@@ -183,7 +183,18 @@ public final class Client {
     public private(set) var inviteLink: String = "" { didSet { touch() } }
     public private(set) var inviteQRImage: String = "" { didSet { touch() } }
     public private(set) var status: String = "" { didSet { touch() } }
-    public var openContact: String? { didSet { touch() } }
+    /// The conversation open in the content pane, kept across a reload of
+    /// the page (p2prc#10) so the person comes back to it: saved as it
+    /// changes, read back as `restoredContact` once the contacts load.
+    public var openContact: String? {
+        didSet {
+            touch()
+            if openContact != oldValue, identity != nil { host?.save(key: "openContact", value: openContact ?? "") }
+        }
+    }
+    /// The conversation that was open before the page reloaded, until the
+    /// person picks another (or goes back to the inbox).
+    public var restoredContact: String? { didSet { touch() } }
     public private(set) var detailsRequested = false { didSet { touch() } }
     public var debugOpenContact: String? { didSet { touch() } }
     public var nick: String = "" { didSet { touch() } }
@@ -222,7 +233,7 @@ public final class Client {
     private var identity: ConvoIdentity?
     private var storageKey: SymmetricKey?
     public var shownContact: String? {
-        if let open = openContact ?? debugOpenContact { return open }
+        if let open = openContact ?? debugOpenContact ?? restoredContact { return open }
         if pairingVisible { return nil }
         return lastPairedContact ?? conversations.first?.contactID
     }
@@ -362,6 +373,11 @@ public final class Client {
                 } else {
                     self.phase = .needsIdentity
                     self.touch()
+                    // A phrase shown before the page reloaded, shown again.
+                    ConvoServices.request({ [weak self] _, preview in
+                        let words = preview.split(separator: " ").map(String.init)
+                        if words.count >= 12 { self?.previewPhrase = words }
+                    }, { host.loadSecret(requestID: $0, key: "previewPhrase") })
                     // Opened from a handoff code before there is an identity.
                     ConvoServices.request({ [weak self] _, payload in
                         let trimmed = payload.hasPrefix("#") ? String(payload.dropFirst()) : payload
@@ -377,7 +393,24 @@ public final class Client {
 
     /// A fresh 12-word recovery phrase for the person to save before it
     /// becomes the identity (`importIdentity(phrase:)` with these words).
-    public func createIdentityPreview() -> [String] { Mnemonic.generate() }
+    /// Kept in the secret store until they continue with it or go back
+    /// (`cancelIdentityPreview()`), so a reload of the page shows the same
+    /// words, not new ones they never saw (p2prc#10).
+    public func createIdentityPreview() -> [String] {
+        let words = Mnemonic.generate()
+        previewPhrase = words
+        host?.saveSecret(key: "previewPhrase", value: words.joined(separator: " "))
+        return words
+    }
+
+    /// The recovery phrase shown before a reload, not yet continued with.
+    public private(set) var previewPhrase: [String] = [] { didSet { touch() } }
+
+    /// The person went back from the phrase they were shown: it's forgotten.
+    public func cancelIdentityPreview() {
+        previewPhrase = []
+        host?.saveSecret(key: "previewPhrase", value: "")
+    }
 
     /// Creates a new identity in one step: a fresh phrase, kept in the
     /// secret store for Settings, and the key it derives (§1).
@@ -407,6 +440,7 @@ public final class Client {
         }
         host.saveSecret(key: "identity", value: Data(id.key.seed).base64EncodedString())
         host.saveSecret(key: "phrase", value: savedPhrase ?? "")
+        if !previewPhrase.isEmpty { cancelIdentityPreview() }
         adopt(id)
         return nil
     }
@@ -536,6 +570,13 @@ public final class Client {
 
     private func finishLoading() {
         touch()
+        if let host {
+            ConvoServices.request({ [weak self] _, saved in
+                guard let self, !saved.isEmpty, self.openContact == nil,
+                      self.conversations.contains(where: { $0.contactID == saved }) else { return }
+                self.restoredContact = saved
+            }, { host.load(requestID: $0, key: "openContact") })
+        }
         if phase == .starting { phase = .idle }
         publishKeyPackage()
         pullLoop()
