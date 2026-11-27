@@ -1,0 +1,7 @@
+# rules_applecross's ported tools (the clean-room actool, ibtool, codesign
+# and the rest, built for Linux) by their SHA-256, for MODULE.bazel's
+# apple_cross_toolchain.configure: its ported-tools workflow's archives from
+# its main at 0785e7f, whose codesign seals a Mac app's nested code (the
+# release's can't), as Monitor's, isomer's and visor's. Nimbus' files serve
+# them (tools/ci/nimbus_files.sh), or a builder's --distdir.
+exports_files(["ported_tools.sha256"])

@@ -83,9 +83,11 @@ register_toolchains(
 
 # rules_applecross, which the registry's rules_apple preset asks for: the
 # Apple apps' bundling toolchains, as in Isomer's examples and the
-# Playground. A Mac builds with its own Xcode (local_xcode); the Linux side
-# (--config=apple_on_linux, with an SDK archive a builder's .bazelrc.user
-# resolves) is there for builders that have one.
+# Playground. CI builds the Apple apps on Linux (--config=apple_on_linux),
+# on Nimbus' runners, with Xcode 27.2's SDK archive and the ported tools
+# from Nimbus' files (tools/ci/nimbus_files.sh's downloader config: the
+# .invalid placeholders below); a Mac builds with its own Xcode
+# (local_xcode), as the proof's VM does.
 bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
 
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
@@ -100,14 +102,16 @@ apple_cross_toolchain.swift(
 )
 apple_cross_toolchain.configure(
     name = "apple_cross_toolchain",
-    apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.0.tar.gz"],
+    apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.2.tar.gz"],
     local_xcode = True,
+    ported_tools_manifest = "//third_party/applecross:ported_tools.sha256",
+    ported_tools_urls = ["https://ported-tools.invalid/sha256/{sha256}"],
     swift_tools = {
         "aarch64": "@applecross_swift_ubuntu24.04-aarch64//:tools",
         "x86_64": "@applecross_swift_ubuntu24.04//:tools",
     },
     swift_tools_macos = "@applecross_swift_xcode//:tools",
-    xcode_version = "27.0",
+    xcode_version = "27.2",
 )
 use_repo(apple_cross_toolchain, "apple_cross_toolchain")
 

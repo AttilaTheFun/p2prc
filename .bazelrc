@@ -72,7 +72,7 @@ build:linux --strategy=SwiftFFIAnalyze=local
 build:linux --strategy=SwiftFFIGenerate=local
 
 # The Apple targets built on Linux with rules_applecross (MODULE.bazel), on a
-# builder that has Xcode 27.0's SDK archive: its .bazelrc.user says where
+# builder that has Xcode 27.2's SDK archive: its .bazelrc.user says where
 # (`--distdir`, or a `--downloader_config`) and turns this on with
 # `build:linux --config=apple_on_linux`. A Mac builds with its own Xcode.
 startup --host_jvm_args=-DBAZEL_TRACK_SOURCE_DIRECTORIES=1

@@ -51,11 +51,16 @@
 # key; one graph's outputs are never served to another's. The disk cache
 # GitHub keeps is restored by the same graph alone
 # (.github/actions/bazel_cache).
-# Never the Apple targets on Linux (.bazelrc's apple_on_linux, which takes
-# Xcode's SDK archive): Apple's SDKs may not be redistributed, so CI builds
-# the Apple targets on GitHub's Macs with their own Xcode (the owner,
-# 2026-11-15). A builder with the archive turns apple_on_linux on in a
-# .bazelrc.user of its own.
+# - on Nimbus' runners (CI_NIMBUS=1; the owner, 2026-11-27: no paid GitHub
+#   runners): Nimbus' remote cache, which Nimbus writes in ~/.bazelrc (read
+#   alone, unless the job was let write it: `nimbus job cache-write`,
+#   populate-apple's), and, for the Apple apps (ISOMER_PLATFORMS apple),
+#   .bazelrc's apple_on_linux, Xcode 27.2's SDK archive and the ported tools
+#   from Nimbus' files (tools/ci/nimbus_files.sh: Apple's SDKs may not be
+#   redistributed, and Nimbus serves them to its own machines alone); under
+#   8 GB, one Swift compile at a time. No BuildBuddy there.
+# A builder with the SDK archive turns apple_on_linux on in a .bazelrc.user
+# of its own.
 # It refuses to replace a .bazelrc.user it didn't write (a builder's own).
 #
 # trim: Bazel collects its disk cache's garbage only when its server is
@@ -131,6 +136,14 @@ setup)
     else
         # A fork's pull request (GitHub gives it no secrets), or a builder's own.
         echo "ci_bazel: no BUILDBUDDY_API_KEY: no remote cache, GitHub's cache alone"
+    fi
+    if [ "${CI_NIMBUS:-}" = 1 ]; then
+        "$ROOT/tools/ci/nimbus_files.sh" "$ROOT/.ci/downloader.cfg"
+        case " ${ISOMER_PLATFORMS:-} " in *" apple "*) lines+=("build:linux --config=apple_on_linux") ;; esac
+        memory="$(awk '/MemTotal/ { print int($2 / 1048576 + 0.5) }' /proc/meminfo 2> /dev/null || echo 16)"
+        if [ "$memory" -lt 8 ]; then
+            lines+=("build --worker_max_instances=SwiftCompile=1 --jobs=2" "startup --host_jvm_args=-Xmx1g")
+        fi
     fi
     if [ -n "$cache" ]; then
         mkdir -p "$cache/disk" "$cache/repository"
