@@ -6,7 +6,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/communication.git",
       "state" : {
-        "revision" : "029de5185bf1b9dbcbac59ea06d3484a305c3505"
+        "revision" : "b88b49d5a4d372e0711cbb6ecd321cd12f4d39c0",
+        "version" : "0.1.1"
       }
     },
     {

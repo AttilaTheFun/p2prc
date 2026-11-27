@@ -34,7 +34,7 @@ let package = Package(
         // platforms only; the node and the CLI never link it, and the
         // Dockerfile strips the apple-only blocks (private repo).
         // apple-only-begin
-        .package(url: "https://github.com/AttilaTheFun/communication.git", revision: "029de5185bf1b9dbcbac59ea06d3484a305c3505"),
+        .package(url: "https://github.com/AttilaTheFun/communication.git", exact: "0.1.1"),
         // apple-only-end
     ],
     targets: [

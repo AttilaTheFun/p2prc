@@ -22,7 +22,7 @@ let package = Package(
         ),
         .package(
             url: "https://github.com/AttilaTheFun/communication.git",
-            revision: "029de5185bf1b9dbcbac59ea06d3484a305c3505"
+            exact: "0.1.1"
         ),
         // Shireworks Kit: crash and bug reports (shake, or Help › Report a
         // Bug… on a Mac) and the update sheet; the Apple apps only.
