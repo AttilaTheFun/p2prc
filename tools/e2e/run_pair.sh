@@ -9,12 +9,14 @@ HERE=$(cd "$(dirname "$0")" && pwd); ROOT=$(cd "$HERE/../.." && pwd); E=$HERE/ou
 # (driver.js's relay=1), its candidate pair in the log.
 R=""; [ "${CONVO_E2E_RELAY:-}" = 1 ] && R="&relay=1"
 A=${CONVO_E2E_SIM_A:-7FCDAC0F-C4C3-4EA6-8554-B3787574679F}; B=${CONVO_E2E_SIM_B:-8339C995-35E0-4AD8-9BEB-3311236D6958}
+# A command under a time limit (perl's alarm: macOS has no timeout(1)).
+limit(){ perl -e 'alarm shift; exec @ARGV' "$@"; }
 log(){ echo "$(date +%T) $*" >> $E/pair.log; }
 cmd(){ echo "$2" >> $E/cmds.txt.$1; }
 # waitfor who pattern seconds: until that side's latest screen text matches.
 waitfor(){ for i in $(seq 1 $3); do sleep 1; lastof $1 'text:' | grep -qE "$2" && return 0; done; log "$1 timed out waiting for: $2"; return 1; }
 lastof(){ grep "\"who\": *\"$1\"" $E/weblog.txt 2>/dev/null | grep "$2" | tail -1 | sed -E 's/.*"m": *"//; s/"}$//'; }
-openwait(){ for t in 1 2 3 4; do xcrun simctl openurl $1 "$2" >/dev/null 2>&1; for i in $(seq 1 30); do sleep 2; grep -q "\"who\": *\"$3\",\"t\":[0-9]*,\"m\":\"text: ." $E/weblog.txt 2>/dev/null && return 0; done; log "$3 not loaded yet, reopening"; done; return 1; }
+openwait(){ for t in 1 2 3 4; do limit 60 xcrun simctl openurl $1 "$2" >/dev/null 2>&1; for i in $(seq 1 30); do sleep 2; grep -q "\"who\": *\"$3\",\"t\":[0-9]*,\"m\":\"text: ." $E/weblog.txt 2>/dev/null && return 0; done; log "$3 not loaded yet, reopening"; done; return 1; }
 # Onboard after the recovery phrase: the switch, then Continue, retried until
 # the inbox shows (a cold first load can still be drawing when Continue is
 # pressed); a retry is logged with the switch's state.
@@ -36,7 +38,6 @@ pkill -f cmdserver.py; rm -f $E/cmds.txt.* $E/weblog.txt $E/pair.log; (cd $E/sit
 # Each simulator erased and booted under a time limit, and booted once more
 # if it isn't up in 5 minutes: a boot that fails leaves `bootstatus -b`
 # waiting for ever (a release's proof hung there until the job's timeout).
-limit(){ perl -e 'alarm shift; exec @ARGV' "$@"; }
 up(){ limit 300 xcrun simctl bootstatus $1 -b >/dev/null 2>&1; }
 for D in $A $B; do
   log "${D:0:8} erasing and booting"; echo "run_pair: ${D:0:8} erasing and booting" >&2
@@ -66,16 +67,18 @@ waitfor a 'Skip|peer-' 120; cmd a 'text:Skip'
 waitfor b 'peer-' 60; cmd b 'row'; waitfor b 'Message|Say something' 30; cmd b 'type:hello from b'; sleep 2; cmd b 'send'
 waitfor a 'hello from b' 60; cmd a 'row'; waitfor a 'text: peer-' 30; cmd a 'type:hello from a'; sleep 2; cmd a 'send'
 waitfor b 'hello from a' 60; inthread b; waitfor b '^text: peer-.*hello from a' 30
-xcrun simctl io $B screenshot --mask=black $E/web_composer_b.png >/dev/null 2>&1
+# Screenshots under a time limit too: one wrote its image and never returned
+# (0.3.1's third proof, held until the run's limit).
+limit 60 xcrun simctl io $B screenshot --mask=black $E/web_composer_b.png >/dev/null 2>&1
 log "a thread: $(lastof a 'text:')"; log "b thread: $(lastof b 'text:')"
 for try in 1 2 3; do cmd a 'aria:Back'; waitfor a 'Inbox' 8 && break; done; log "a inbox: $(lastof a 'text:')"; for try in 1 2 3; do cmd a 'row'; waitfor a 'text: peer-' 8 && break; done; log "a reopened: $(lastof a 'text:')"
 inthread b; cmd b 'type:after reopen'; sleep 2; cmd b 'send'; waitfor a 'after reopen' 60; log "a after reopen: $(lastof a 'text:')"
 cmd a "js:(()=>{const v=visualViewport,se=document.scrollingElement,ta=document.querySelector('textarea').getBoundingClientRect();const bs=[...document.querySelectorAll('body *')].filter(e=>/after reopen/.test(e.textContent||'')&&!e.children.length);const lb=bs.length?bs[bs.length-1].getBoundingClientRect():null;const vars=[...document.querySelectorAll('[style*=\"--\"]')].map(e=>e.getAttribute('style').match(/--[^;]+/g).join(',')).join(' / ');return JSON.stringify({sy:scrollY,ih:innerHeight,vh:v.height,vt:v.offsetTop,sh:se.scrollHeight,ch:se.clientHeight,ta:[ta.top,ta.bottom],last:lb&&[lb.top,lb.bottom],vars})})()"; sleep 3; log "probe: $(lastof a 'js ')"
-xcrun simctl io $A screenshot --mask=black $E/web_thread.png >/dev/null 2>&1
+limit 60 xcrun simctl io $A screenshot --mask=black $E/web_thread.png >/dev/null 2>&1
 # The peer link can take a retry to come up (the app reconnects after a failed attempt): give it a while before
 # recording it.
 if [ -n "$R" ]; then for i in $(seq 1 45); do lastof a '"m":"ice ' | grep -q 'ice connected' && lastof b '"m":"ice ' | grep -q 'ice connected' && break; sleep 1; done; fi
 log "ice a: $(lastof a '"m":"ice ' | sed 's/.*"m":"//; s/"}$//')"; log "ice b: $(lastof b '"m":"ice ' | sed 's/.*"m":"//; s/"}$//')"
 log "traps: $(grep -c 'Fatal error' $E/weblog.txt)"
 log done
-pkill -f cmdserver.py; xcrun simctl shutdown $A >/dev/null 2>&1; xcrun simctl shutdown $B >/dev/null 2>&1; log "sims down"
+pkill -f cmdserver.py; limit 60 xcrun simctl shutdown $A >/dev/null 2>&1; limit 60 xcrun simctl shutdown $B >/dev/null 2>&1; log "sims down"
