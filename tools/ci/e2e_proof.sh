@@ -29,9 +29,10 @@ cd "$ROOT" || exit
 limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }
 step() { echo "e2e_proof: $(date -u +%T) $*"; }
 # The site the simulators open (run_pair.sh takes it from Bazel's output),
-# and convo_ci, which writes the proof: 30 minutes at most.
+# and convo_ci, which writes the proof: 60 minutes at most, since a runner
+# with a cold cache builds for over half an hour (0.3.1's second proof).
 step "building the web client and convo_ci"
-limit 1800 bazel build //applications/p2prc_web:p2prc_web //tools/convo_ci || { step "the build failed or took over 30 minutes"; exit 1; }
+limit 3600 bazel build //applications/p2prc_web:p2prc_web //tools/convo_ci || { step "the build failed or took over 60 minutes"; exit 1; }
 convo_ci="$(bazel info execution_root)/$(bazel cquery --output=files //tools/convo_ci 2> /dev/null | head -1)"
 # Two iPhones, the run's own: the iOS runtime that supports the most device
 # types (a device-specific runtime supports one) and its first iPhone.
