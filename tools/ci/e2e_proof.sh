@@ -22,21 +22,26 @@ proof="${1:?usage: tools/ci/e2e_proof.sh <proof dir> [<run dir>]}"
 run="${2:-$(mktemp -d)}"
 mkdir -p "$proof" "$run"
 cd "$ROOT" || exit
+# Every step under a time limit (perl's alarm: macOS has no timeout(1)), and
+# said as it starts, so a step that hangs fails the proof with its name in
+# the log, rather than holding the runner until the job's timeout (0.3.1's
+# proof ran two hours and its log was lost).
+limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+step() { echo "e2e_proof: $(date -u +%T) $*"; }
 # The site the simulators open (run_pair.sh takes it from Bazel's output),
-# and convo_ci, which writes the proof.
-bazel build //applications/p2prc_web:p2prc_web //tools/convo_ci || exit
+# and convo_ci, which writes the proof: 30 minutes at most.
+step "building the web client and convo_ci"
+limit 1800 bazel build //applications/p2prc_web:p2prc_web //tools/convo_ci || { step "the build failed or took over 30 minutes"; exit 1; }
 convo_ci="$(bazel info execution_root)/$(bazel cquery --output=files //tools/convo_ci 2> /dev/null | head -1)"
 # Two iPhones, the run's own: the iOS runtime that supports the most device
 # types (a device-specific runtime supports one) and its first iPhone.
-read -r runtime device <<< "$(xcrun simctl list runtimes -j | python3 -I -c 'import json, sys
+step "finding the iOS runtime"
+read -r runtime device <<< "$(limit 120 xcrun simctl list runtimes -j | python3 -I -c 'import json, sys
 r = max((x for x in json.load(sys.stdin)["runtimes"] if x["platform"] == "iOS" and x["isAvailable"]),
         key=lambda x: len(x.get("supportedDeviceTypes", [])))
 print(r["identifier"], next(d["identifier"] for d in r["supportedDeviceTypes"] if d["productFamily"] == "iPhone"))')" || exit
 echo "e2e_proof: two $device on $runtime"
-# Every simctl call and the run itself under a time limit (perl's alarm:
-# macOS has no timeout(1)), so a simulator that hangs fails the proof in
-# minutes rather than holding the runner until the job's timeout.
-limit() { perl -e 'alarm shift; exec @ARGV' "$@"; }
+step "making the simulators"
 a="$(limit 180 xcrun simctl create p2prc-e2e-a "$device" "$runtime")" || exit
 b="$(limit 180 xcrun simctl create p2prc-e2e-b "$device" "$runtime")" || exit
 echo "e2e_proof: made $a and $b"
