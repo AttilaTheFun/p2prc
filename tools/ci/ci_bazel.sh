@@ -134,8 +134,13 @@ setup)
         lines+=("try-import $secret_rc")
         echo "ci_bazel: BuildBuddy's remote cache ($instance), read and written$([ $whole -eq 1 ] && echo ", every output downloaded") (${GITHUB_EVENT_NAME:-}, ${GITHUB_REF:-}, ${GITHUB_JOB:-})"
     else
-        # A fork's pull request (GitHub gives it no secrets), or a builder's own.
-        echo "ci_bazel: no BUILDBUDDY_API_KEY: no remote cache, GitHub's cache alone"
+        # Nimbus' runners (their cache Nimbus' own, in ~/.bazelrc), a fork's
+        # pull request (GitHub gives it no secrets), or a builder's own.
+        if [ "${CI_NIMBUS:-}" = 1 ]; then
+            echo "ci_bazel: Nimbus' remote cache (~/.bazelrc), no BuildBuddy"
+        else
+            echo "ci_bazel: no BUILDBUDDY_API_KEY: no remote cache, GitHub's cache alone"
+        fi
     fi
     if [ "${CI_NIMBUS:-}" = 1 ]; then
         "$ROOT/tools/ci/nimbus_files.sh" "$ROOT/.ci/downloader.cfg"
