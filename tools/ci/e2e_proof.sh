@@ -48,12 +48,22 @@ echo "e2e_proof: made $a and $b"
             --cellularMode active --cellularBars 4 --operatorName "" --batteryState charged --batteryLevel 100
     done
 ) &
+status_bar=$!
+# The run's log as it's written, in the job's log, so a run that stalls shows
+# where (run_pair.sh starts it afresh: -F follows the new file).
+tail -n 0 -F tools/e2e/out/pair.log 2> /dev/null | sed -u 's/^/pair: /' &
+progress=$!
 # The run: 40 minutes at most (a passing one takes under 10).
 CONVO_E2E_RELAY=1 CONVO_E2E_SIM_A="$a" CONVO_E2E_SIM_B="$b" limit 2400 bash tools/e2e/run_pair.sh
 status=$?
 [ "$status" -ne 142 ] || { echo "e2e_proof: the run took more than 40 minutes and was stopped"; pkill -f cmdserver.py; limit 60 xcrun simctl shutdown "$a"; limit 60 xcrun simctl shutdown "$b"; }
-wait
-cp tools/e2e/out/pair.log "$run/pair.log"
+# The status bar's loop and the log's tail stopped, not waited for: on
+# simulators that never came up the loop could run for most of an hour (0.3.1's
+# proof, after its run was stopped, waited on it until the job was cancelled).
+kill "$status_bar" "$progress" 2> /dev/null
+pkill -f "tail -n 0 -F tools/e2e/out/pair.log" 2> /dev/null
+wait 2> /dev/null
+cp tools/e2e/out/pair.log "$run/pair.log" 2> /dev/null || echo "e2e_proof: the run wrote no log" > "$run/pair.log"
 # Masked by run_pair.sh (--mask=black): a fresh simulator draws the Dynamic
 # Island and another doesn't.
 [ ! -f tools/e2e/out/web_thread.png ] || cp tools/e2e/out/web_thread.png "$run/ios-web-thread.png"
