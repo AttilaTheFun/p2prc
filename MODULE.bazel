@@ -88,7 +88,7 @@ register_toolchains(
 # from Nimbus' files (tools/ci/nimbus_files.sh's downloader config: the
 # .invalid placeholders below); a Mac builds with its own Xcode
 # (local_xcode), as the proof's VM does.
-bazel_dep(name = "rules_applecross", version = "0.0.3.382f8c3")
+bazel_dep(name = "rules_applecross", version = "0.0.3.5a261b1")
 
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
 apple_cross_toolchain.swift(
@@ -104,8 +104,11 @@ apple_cross_toolchain.configure(
     name = "apple_cross_toolchain",
     apple_sdk_urls = ["https://apple-sdks.invalid/apple-sdks-27.2.tar.gz"],
     local_xcode = True,
-    ported_tools_manifest = "//third_party/applecross:ported_tools.sha256",
-    # Nimbus' files first (tools/ci/nimbus_files.sh), then codesign's release.
+    # The ported tools (the clean-room actool, ibtool, codesign and the
+    # rest, built for Linux), as this rules_applecross lists them (ported
+    # tools 0.0.141, whose codesign signs a framework's Versions/A as
+    # Apple's does: rules_apple signs the Mac app's imported WebRTC.framework
+    # so): Nimbus' files first (tools/ci/nimbus_files.sh), then that release.
     ported_tools_urls = [
         "https://ported-tools.invalid/sha256/{sha256}",
         "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/ported-tools-0.0.141/{name}",
@@ -169,9 +172,9 @@ bazel_dep(name = "bazel_skylib", version = "1.9.0")
 bazel_dep(name = "platforms", version = "1.1.0")
 
 # rules_apple and apple_support at Isomer's versions: the registry's preset
-# rules_apple 5.3.1.applecross.6 (rules_applecross's patches), named
+# rules_apple 5.3.1.applecross.7 (rules_applecross's patches), named
 # build_bazel_rules_apple as Isomer names it, and the BCR's apple_support.
-bazel_dep(name = "rules_apple", version = "5.3.1.applecross.6", repo_name = "build_bazel_rules_apple")
+bazel_dep(name = "rules_apple", version = "5.3.1.applecross.7", repo_name = "build_bazel_rules_apple")
 bazel_dep(name = "apple_support", version = "2.11.0")
 
 # Declared after apple_support so apple_support's apple cc toolchain keeps
