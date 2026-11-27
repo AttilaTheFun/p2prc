@@ -33,7 +33,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
         // build_tools: CI's shared tools (`sign`, for the Apple and Android
         // apps), built here and run by the alpha and release jobs.
-        .package(url: "https://github.com/AttilaTheFun/build_tools.git", exact: "0.4.2"),
+        .package(url: "https://github.com/AttilaTheFun/build_tools.git", exact: "0.7.0"),
         // The protocol, its node and clients: this repository's protocol/
         // (its package identity "protocol", from the folder's name).
         .package(path: "../../protocol"),
