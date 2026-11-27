@@ -1,5 +1,5 @@
 {
-  "originHash" : "33ce55feb42a6aae9b0440b094960291d620f649ef151a3d6178fedb61d0180c",
+  "originHash" : "cf401b067745f63fe04dafcdcc388685f7c64f772b67a8b6427c3788ad8f64e4",
   "pins" : [
     {
       "identity" : "agent_ui",
@@ -306,12 +306,12 @@
       }
     },
     {
-      "identity" : "webrtc",
+      "identity" : "webrtc-xcframework",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/stasel/WebRTC",
+      "location" : "https://github.com/AttilaTheFun/webrtc-xcframework",
       "state" : {
-        "revision" : "1d04692697cb642bfebf6ad2dd99fe52649c3d6d",
-        "version" : "152.0.0"
+        "revision" : "9ec974a6011838a557425f8252622bbcfc17d562",
+        "version" : "150.7871.2-privacy-fix"
       }
     }
   ],
