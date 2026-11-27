@@ -17,6 +17,11 @@ cmd(){ echo "$2" >> $E/cmds.txt.$1; }
 waitfor(){ for i in $(seq 1 $3); do sleep 1; lastof $1 'text:' | grep -qE "$2" && return 0; done; log "$1 timed out waiting for: $2"; return 1; }
 lastof(){ grep "\"who\": *\"$1\"" $E/weblog.txt 2>/dev/null | grep "$2" | tail -1 | sed -E 's/.*"m": *"//; s/"}$//'; }
 openwait(){ for t in 1 2 3 4; do limit 60 xcrun simctl openurl $1 "$2" >/dev/null 2>&1; for i in $(seq 1 30); do sleep 2; grep -q "\"who\": *\"$3\",\"t\":[0-9]*,\"m\":\"text: ." $E/weblog.txt 2>/dev/null && return 0; done; log "$3 not loaded yet, reopening"; done; return 1; }
+# A screenshot, taken in the background and waited for until its image is
+# whole (its size the same for two seconds), 3 minutes at most, then stopped:
+# on CI simctl io has written its image and never returned (0.3.1's third
+# proof), and taken over a minute to write it (its fourth).
+shot(){ rm -f "$2"; xcrun simctl io $1 screenshot --mask=black "$2" >/dev/null 2>&1 & local pid=$! last=-1 size; for i in $(seq 1 90); do sleep 2; kill -0 $pid 2>/dev/null || break; size=$(stat -f %z "$2" 2>/dev/null || echo 0); [ "$size" -gt 0 ] && [ "$size" = "$last" ] && break; last=$size; done; kill $pid 2>/dev/null; wait $pid 2>/dev/null; [ -s "$2" ] || log "${1:0:8} no screenshot after 3 minutes: $(basename "$2")"; }
 # Onboard after the recovery phrase: the switch, then Continue, retried until
 # the inbox shows (a cold first load can still be drawing when Continue is
 # pressed); a retry is logged with the switch's state.
@@ -67,14 +72,12 @@ waitfor a 'Skip|peer-' 120; cmd a 'text:Skip'
 waitfor b 'peer-' 60; cmd b 'row'; waitfor b 'Message|Say something' 30; cmd b 'type:hello from b'; sleep 2; cmd b 'send'
 waitfor a 'hello from b' 60; cmd a 'row'; waitfor a 'text: peer-' 30; cmd a 'type:hello from a'; sleep 2; cmd a 'send'
 waitfor b 'hello from a' 60; inthread b; waitfor b '^text: peer-.*hello from a' 30
-# Screenshots under a time limit too: one wrote its image and never returned
-# (0.3.1's third proof, held until the run's limit).
-limit 60 xcrun simctl io $B screenshot --mask=black $E/web_composer_b.png >/dev/null 2>&1
+shot $B $E/web_composer_b.png
 log "a thread: $(lastof a 'text:')"; log "b thread: $(lastof b 'text:')"
 for try in 1 2 3; do cmd a 'aria:Back'; waitfor a 'Inbox' 8 && break; done; log "a inbox: $(lastof a 'text:')"; for try in 1 2 3; do cmd a 'row'; waitfor a 'text: peer-' 8 && break; done; log "a reopened: $(lastof a 'text:')"
 inthread b; cmd b 'type:after reopen'; sleep 2; cmd b 'send'; waitfor a 'after reopen' 60; log "a after reopen: $(lastof a 'text:')"
 cmd a "js:(()=>{const v=visualViewport,se=document.scrollingElement,ta=document.querySelector('textarea').getBoundingClientRect();const bs=[...document.querySelectorAll('body *')].filter(e=>/after reopen/.test(e.textContent||'')&&!e.children.length);const lb=bs.length?bs[bs.length-1].getBoundingClientRect():null;const vars=[...document.querySelectorAll('[style*=\"--\"]')].map(e=>e.getAttribute('style').match(/--[^;]+/g).join(',')).join(' / ');return JSON.stringify({sy:scrollY,ih:innerHeight,vh:v.height,vt:v.offsetTop,sh:se.scrollHeight,ch:se.clientHeight,ta:[ta.top,ta.bottom],last:lb&&[lb.top,lb.bottom],vars})})()"; sleep 3; log "probe: $(lastof a 'js ')"
-limit 60 xcrun simctl io $A screenshot --mask=black $E/web_thread.png >/dev/null 2>&1
+shot $A $E/web_thread.png
 # The peer link can take a retry to come up (the app reconnects after a failed attempt): give it a while before
 # recording it.
 if [ -n "$R" ]; then for i in $(seq 1 45); do lastof a '"m":"ice ' | grep -q 'ice connected' && lastof b '"m":"ice ' | grep -q 'ice connected' && break; sleep 1; done; fi
