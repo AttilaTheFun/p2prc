@@ -20,8 +20,10 @@ openwait(){ for t in 1 2 3 4; do limit 60 xcrun simctl openurl $1 "$2" >/dev/nul
 # A screenshot, taken in the background and waited for until its image is
 # whole (its size the same for two seconds), 3 minutes at most, then stopped:
 # on CI simctl io has written its image and never returned (0.3.1's third
-# proof), and taken over a minute to write it (its fourth).
-shot(){ rm -f "$2"; xcrun simctl io $1 screenshot --mask=black "$2" >/dev/null 2>&1 & local pid=$! last=-1 size; for i in $(seq 1 90); do sleep 2; kill -0 $pid 2>/dev/null || break; size=$(stat -f %z "$2" 2>/dev/null || echo 0); [ "$size" -gt 0 ] && [ "$size" = "$last" ] && break; last=$size; done; kill $pid 2>/dev/null; wait $pid 2>/dev/null; [ -s "$2" ] || log "${1:0:8} no screenshot after 3 minutes: $(basename "$2")"; }
+# proof), and taken over a minute to write it (its fourth). Stopped by
+# SIGKILL: it outlives a SIGTERM, which held the wait for it until the
+# run's limit (0.3.1's fifth proof).
+shot(){ rm -f "$2"; xcrun simctl io $1 screenshot --mask=black "$2" >/dev/null 2>&1 & local pid=$! last=-1 size; for i in $(seq 1 90); do sleep 2; kill -0 $pid 2>/dev/null || break; size=$(stat -f %z "$2" 2>/dev/null || echo 0); [ "$size" -gt 0 ] && [ "$size" = "$last" ] && break; last=$size; done; kill -KILL $pid 2>/dev/null; wait $pid 2>/dev/null; [ -s "$2" ] || log "${1:0:8} no screenshot after 3 minutes: $(basename "$2")"; }
 # Onboard after the recovery phrase: the switch, then Continue, retried until
 # the inbox shows (a cold first load can still be drawing when Continue is
 # pressed); a retry is logged with the switch's state.

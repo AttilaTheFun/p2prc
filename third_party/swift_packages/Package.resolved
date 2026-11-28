@@ -1,5 +1,5 @@
 {
-  "originHash" : "e67d4d0d8587c2b89b9d547728ba66559b155d3a3ef4b141339314bfadbe38bd",
+  "originHash" : "02ae22437912a917fc6fed64ad791b7d80ef60584fac1ec325282603fcb8e6d3",
   "pins" : [
     {
       "identity" : "agent_ui",
@@ -76,8 +76,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/shireworks_kit.git",
       "state" : {
-        "revision" : "20bf1f23d48741e127b04a03373aa3177bef32f7",
-        "version" : "0.2.0"
+        "revision" : "ad0a314212859541e9d1c2bb5ff1424309bccc42",
+        "version" : "0.3.0"
       }
     },
     {

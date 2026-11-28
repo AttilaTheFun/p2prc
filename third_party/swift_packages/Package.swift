@@ -28,7 +28,7 @@ let package = Package(
         // Bug… on a Mac) and the update sheet; the Apple apps only.
         // A crash in this public repository is filed without its reason or
         // breadcrumbs (since 0.1.0).
-        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", exact: "0.2.0"),
+        .package(url: "https://github.com/AttilaTheFun/shireworks_kit.git", exact: "0.3.0"),
         // Arguments for the repo's own tools (tools/convo_ci).
         .package(url: "https://github.com/apple/swift-argument-parser", exact: "1.8.2"),
         // build_tools: CI's shared tools (`sign`, for the Apple and Android
