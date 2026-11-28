@@ -88,7 +88,7 @@ register_toolchains(
 # from Nimbus' files (tools/ci/nimbus_files.sh's downloader config: the
 # .invalid placeholders below); a Mac builds with its own Xcode
 # (local_xcode), as the proof's VM does.
-bazel_dep(name = "rules_applecross", version = "0.0.3.5a261b1")
+bazel_dep(name = "rules_applecross", version = "0.0.3.d44bc87")
 
 apple_cross_toolchain = use_extension("@rules_applecross//toolchain:extensions.bzl", "apple_cross_toolchain")
 apple_cross_toolchain.swift(
@@ -106,12 +106,14 @@ apple_cross_toolchain.configure(
     local_xcode = True,
     # The ported tools (the clean-room actool, ibtool, codesign and the
     # rest, built for Linux), as this rules_applecross lists them (ported
-    # tools 0.0.141, whose codesign signs a framework's Versions/A as
-    # Apple's does: rules_apple signs the Mac app's imported WebRTC.framework
-    # so): Nimbus' files first (tools/ci/nimbus_files.sh), then that release.
+    # tools 0.0.142: its codesign signs a framework's Versions/A as Apple's
+    # does, which rules_apple asks of the Mac app's imported WebRTC.framework,
+    # and its strict actool takes an Icon Composer icon's images Xcode
+    # flattened, artwork/app_icon/Convo.icon/Flattened): Nimbus' files first
+    # (tools/ci/nimbus_files.sh), then that release.
     ported_tools_urls = [
         "https://ported-tools.invalid/sha256/{sha256}",
-        "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/ported-tools-0.0.141/{name}",
+        "https://github.com/apple-cross-toolchain/rules_applecross/releases/download/ported-tools-0.0.142/{name}",
     ],
     swift_tools = {
         "aarch64": "@applecross_swift_ubuntu24.04-aarch64//:tools",

@@ -84,7 +84,6 @@ build:apple_on_linux --@build_bazel_rules_apple//apple:sdk_tool_files=@apple_cro
 build:apple_on_linux --action_env=DEVELOPER_DIR=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer
 build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/bin:/usr/bin:/usr/local/bin
 build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
-build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 
 # An iPhone build for CI to sign (its alpha job): arm64, signed ad hoc with
 # its entitlements and a placeholder profile (tools/signing), which CI's
