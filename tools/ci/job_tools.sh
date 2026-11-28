@@ -37,7 +37,15 @@ if [[ $platforms == *" linux "* ]] &&
     packages+=(pkg-config lld libsdl2-dev libsdl2-ttf-dev libgl-dev libegl-dev libglvnd-dev libgtk-3-dev
                libwebkit2gtk-4.1-dev libcurl4-openssl-dev libsqlite3-dev libnss3)
 fi
-if [ ${#packages[@]} -gt 1 ]; then
+# On Nimbus' runners (CI_NIMBUS=1): no apt. Their network reaches only the
+# egress proxy's hosts, which Ubuntu's mirrors aren't, and their image
+# (visor-agent) has what the Apple build runs (Bazel through Bazelisk, git);
+# what it lacks of the list above (zstd, xz, file, openssl, sudo) no P2PRC
+# script calls there, so it's named, not installed. The first verify-apple
+# on Nimbus failed here, at apt-get, with no log GitHub could show.
+if [ "${CI_NIMBUS:-}" = 1 ]; then
+    [ ${#packages[@]} -le 1 ] || echo "::warning::job_tools: not installed on Nimbus (no apt there): ${packages[*]:1}"
+elif [ ${#packages[@]} -gt 1 ]; then
     root_do apt-get update -qq > /dev/null
     root_do env DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends "${packages[@]}" > /dev/null
 fi
