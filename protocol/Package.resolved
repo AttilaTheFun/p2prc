@@ -1,12 +1,13 @@
 {
-  "originHash" : "691e1edf72de9a1aad3a3c63bc93ca21cb16772901760122954c831b5f339a02",
+  "originHash" : "398bb9865acf4bc7fb6541018df9434fe4d885cae7367ad4b806b14c77c4c3ef",
   "pins" : [
     {
       "identity" : "communication",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/communication.git",
       "state" : {
-        "revision" : "029de5185bf1b9dbcbac59ea06d3484a305c3505"
+        "revision" : "2c3c0e55222e26413c9219dd61189ab23654e615",
+        "version" : "0.2.1"
       }
     },
     {
@@ -28,12 +29,12 @@
       }
     },
     {
-      "identity" : "webrtc",
+      "identity" : "webrtc-xcframework",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/stasel/WebRTC",
+      "location" : "https://github.com/AttilaTheFun/webrtc-xcframework",
       "state" : {
-        "revision" : "1d04692697cb642bfebf6ad2dd99fe52649c3d6d",
-        "version" : "152.0.0"
+        "revision" : "9ec974a6011838a557425f8252622bbcfc17d562",
+        "version" : "150.7871.2-privacy-fix"
       }
     }
   ],
