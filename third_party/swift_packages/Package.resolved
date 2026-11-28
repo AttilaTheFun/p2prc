@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
-  "originHash" : "cf401b067745f63fe04dafcdcc388685f7c64f772b67a8b6427c3788ad8f64e4",
-=======
-  "originHash" : "09d189752dc2df977d72a67da72ca28f529bc7d91102774177fbe4815e7fe851",
->>>>>>> origin/main
+  "originHash" : "6a55a5cc5063c07e8c9f94c0f272f6aac4969bcc2e83175aa363e592ba7601a3",
   "pins" : [
     {
       "identity" : "agent_ui",
@@ -27,8 +23,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/communication.git",
       "state" : {
-        "revision" : "b88b49d5a4d372e0711cbb6ecd321cd12f4d39c0",
-        "version" : "0.1.1"
+        "revision" : "2c3c0e55222e26413c9219dd61189ab23654e615",
+        "version" : "0.2.1"
       }
     },
     {

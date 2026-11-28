@@ -1,13 +1,13 @@
 {
-  "originHash" : "bb54ebf0cdce80a350be94069ccad17d897f7dbff6d11d93d33e4137385456dd",
+  "originHash" : "398bb9865acf4bc7fb6541018df9434fe4d885cae7367ad4b806b14c77c4c3ef",
   "pins" : [
     {
       "identity" : "communication",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/AttilaTheFun/communication.git",
       "state" : {
-        "revision" : "b88b49d5a4d372e0711cbb6ecd321cd12f4d39c0",
-        "version" : "0.1.1"
+        "revision" : "2c3c0e55222e26413c9219dd61189ab23654e615",
+        "version" : "0.2.1"
       }
     },
     {
