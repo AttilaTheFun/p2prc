@@ -32,7 +32,7 @@
     o.buttons=0; for(const t of ['pointerup','mouseup','click']) el.dispatchEvent(new (t.startsWith('pointer')?PointerEvent:MouseEvent)(t,o));};
   const tapText=(t)=>{const el=deepest(t); if(!el) return false; const tap=el.closest('[data-tap]'); if(tap) press(tap); else {let a=el; for(let i=0;i<4&&a;i++){press(a); a=a.parentElement;}} return true;};
   const tapAria=(l)=>{const b=document.querySelector('[aria-label="'+l+'"]'); if(!b) return false; const tap=b.closest('[data-tap]')||b; press(tap); return true;};
-  const _f=window.fetch.bind(window); window.fetch=async(i,init)=>{ const r=await _f(i,init); try{ const u=typeof i==='string'?i:i.url; if(u.includes('/rendezvous/')||u.includes('/keypackages/')){ const b=await r.clone().text(); send('net '+((init&&init.method)||'GET')+' '+u.replace(/https:\/\/convo-node-(\d)[^/]*/,'n$1').slice(0,70)+' '+r.status+' '+b.length); } }catch(e){} return r; };
+  const _f=window.fetch.bind(window); window.fetch=async(i,init)=>{ let r; try{ r=await _f(i,init); }catch(e){ const u=typeof i==='string'?i:i.url; send('net-error '+((init&&init.method)||'GET')+' '+String(u).slice(0,90)+' '+e); throw e; } try{ const u=typeof i==='string'?i:i.url; if(u.includes('/rendezvous/')||u.includes('/keypackages/')){ const b=await r.clone().text(); send('net '+((init&&init.method)||'GET')+' '+u.replace(/https:\/\/convo-node-(\d)[^/]*/,'n$1').slice(0,70)+' '+r.status+' '+b.length); } }catch(e){} return r; };
   window.__do=(cmd)=>{
     if(cmd.startsWith('text:')) return tapText(cmd.slice(5));
     if(cmd.startsWith('aria:')) return tapAria(cmd.slice(5));

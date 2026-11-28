@@ -72,7 +72,7 @@ build:linux --strategy=SwiftFFIAnalyze=local
 build:linux --strategy=SwiftFFIGenerate=local
 
 # The Apple targets built on Linux with rules_applecross (MODULE.bazel), on a
-# builder that has Xcode 27.0's SDK archive: its .bazelrc.user says where
+# builder that has Xcode 27.2's SDK archive: its .bazelrc.user says where
 # (`--distdir`, or a `--downloader_config`) and turns this on with
 # `build:linux --config=apple_on_linux`. A Mac builds with its own Xcode.
 startup --host_jvm_args=-DBAZEL_TRACK_SOURCE_DIRECTORIES=1
@@ -84,7 +84,6 @@ build:apple_on_linux --@build_bazel_rules_apple//apple:sdk_tool_files=@apple_cro
 build:apple_on_linux --action_env=DEVELOPER_DIR=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer
 build:apple_on_linux --action_env=PATH=external/rules_applecross++apple_cross_toolchain+apple_cross_toolchain/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin:/bin:/usr/bin:/usr/local/bin
 build:apple_on_linux --action_env=RULES_APPLECROSS_RESOURCE_OUTPUT_MODE=relaxed
-build:apple_on_linux --action_env=RULES_APPLECROSS_RELAX_ACTOOL_ICON_COMPOSER=1
 
 # An iPhone build for CI to sign (its alpha job): arm64, signed ad hoc with
 # its entitlements and a placeholder profile (tools/signing), which CI's

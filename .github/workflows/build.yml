@@ -6,8 +6,14 @@
 # Android together, one job and one Bazel output base, in Swift's image (by
 # digest) on x86_64 Ubuntu (Android's SDK tools are x86_64), with the job's
 # tools added (tools/ci/job_tools.sh), and the protocol's tests (SwiftPM,
-# tools/ci/protocol_test.sh) beside them; the Apple targets on `xcode-27`
-# Macs with their own Xcode (Apple's SDKs may not be redistributed). Bazel's
+# tools/ci/protocol_test.sh) beside them. The Apple targets on Nimbus'
+# runners (the owner, 2026-11-27: no paid GitHub runners): built on Linux
+# with rules_applecross (Xcode 27.2's SDK archive from Nimbus' files, which
+# serves it to its own machines alone: Apple's SDKs may not be
+# redistributed; CI_NIMBUS=1 tools/ci/ci_bazel.sh setup), Nimbus' cache
+# theirs, and the proof on a macOS VM a Nimbus runner leases
+# (tools/ci/proof_on_vm.sh). A fork's pull request never reaches Nimbus'
+# runners, and no Apple job runs for one. The GitHub jobs' Bazel
 # caches are GitHub's (.github/actions/bazel_cache), written by main's
 # builds alone, and BuildBuddy's remote cache, its key the
 # BUILDBUDDY_API_KEY secret, handed to the cache action's setup alone, in
@@ -20,18 +26,16 @@
 # - pull requests: container (the web and Android apps, CI's tools, and the
 #   protocol's tests): the required check. A newer push cancels its run.
 #   The Apple apps aren't built for a pull request (the owner's rule for
-#   public repositories, 2026-11-13: GitHub's shared macOS runners are the
-#   bottleneck): they're built nightly (populate-apple, which opens an issue
-#   when main's are broken), by hand (`run: verify`) and at release
-#   (verify-apple, alpha-apple).
+#   public repositories, 2026-11-13): they're built nightly on Nimbus
+#   (populate-apple, which opens an issue when main's are broken), by hand
+#   (`run: verify`) and at release (verify-apple, alpha-apple).
 # - main's commits: populate (the web and Android, and what a release
 #   builds, into the caches; never a proof). The Apple apps' populate-apple
 #   runs nightly (schedule, 06:00Z) or by hand (`run: populate`), not on
-#   every push: GitHub's macOS runners are shared by every public
-#   repository, and a push's populate held one for hours.
+#   every push, writing Nimbus' cache.
 # - by hand (`run:`): verify (the builds and the protocol's tests, no
-#   proof: verify, verify-apple); proof (the end-to-end run alone, on an
-#   `xcode-27` Mac: two simulators open the web client in Safari, pair and
+#   proof: verify, verify-apple); proof (the end-to-end run alone, on a
+#   macOS VM leased from Nimbus: two simulators open the web client in Safari, pair and
 #   message through the live nodes, their link relayed by Cloudflare's TURN
 #   (tools/ci/e2e_proof.sh, tools/e2e/run_pair.sh), written in Reviews'
 #   format 2 by `convo_ci proof`, which judges the run by what happened;
@@ -52,13 +56,15 @@
 #   builds.json, which Applications reads) and SHA256SUMS, beside the
 #   proposal's web client and proof.zip. pages.yml deploys the web client
 #   to p2prc.org. A pre-release is never released so.
-# The signing keys reach only the alpha and release jobs' signing steps.
-# The distribution's settings (the team, UpdateKit's app group and the
-# Applications bundle ids, the shared GitHub sign-in: P2PRC_* secrets,
-# tools/signing/extension.bzl) reach only alpha-apple's build, by name
-# (--repo_env=NAME, their values in that step's environment, never on a
-# command line), and the team the release job's check; never a pull
-# request's build.
+# The signing keys reach only the alpha and release jobs' signing steps, on
+# GitHub's runners: no secret reaches Nimbus' runners or VMs. The
+# distribution's settings (the team, UpdateKit's app group and the
+# Applications bundle ids, the shared GitHub sign-in: P2PRC_* secrets) are
+# never built in: alpha-apple builds the Alphas without them, and alpha's
+# signing step stamps them into each app's Info.plist and entitlements as
+# `sign apple` signs it (build_tools' --add-infoplist and --add-groups,
+# files of the step's own; build_tools#18), the team the release job's check
+# too; never a pull request's build.
 name: Build
 on:
   push:
@@ -67,8 +73,7 @@ on:
   pull_request:
   release:
     types: [published]
-  # populate-apple: the Apple apps into the caches, nightly, so main's pushes
-  # don't hold one of the macOS runners every public repository shares.
+  # populate-apple: the Apple apps into Nimbus' cache, nightly.
   schedule:
     - cron: "0 6 * * *"
   workflow_dispatch:
@@ -90,7 +95,7 @@ permissions:
 # What the publishing jobs build (flags as --name=value): the iPhone and
 # iPad app (a device build, signed ad hoc with a placeholder profile by
 # --config=ci_device, which build_tools' `sign apple` signs again with the
-# bundle id's own) and the Mac app on a Mac, both optimized; Android's (its
+# bundle id's own) and the Mac app, both optimized, on Linux; Android's (its
 # isomer_android_app's _apk) on Linux; the web client zipped by
 # tools/ci/package_web.sh. DISTRIBUTION_SETTINGS names the settings the
 # Alphas carry, their values the step's environment's (alpha-apple).
@@ -106,9 +111,10 @@ env:
   PUBLISHED_LINUX: >-
     --compilation_mode=opt
     //applications/p2prc_android:p2prc_android_apk
+  # Built in: where Shireworks Kit files reports (this repository's name,
+  # no secret). The rest of the distribution's settings are stamped at
+  # signing (alpha).
   DISTRIBUTION_SETTINGS: >-
-    --repo_env=P2PRC_TEAM_ID --repo_env=P2PRC_APP_GROUP --repo_env=P2PRC_APPLICATIONS_BUNDLE_IDS
-    --repo_env=P2PRC_SHARED_CLIENT_ID --repo_env=P2PRC_SHARED_SERVICE
     --repo_env=P2PRC_SHIREWORKS_REPOSITORY
   # The apps P2PRC's builds replace (builds.json's `replaces`): Convo's,
   # on each platform.
@@ -205,43 +211,57 @@ jobs:
           path: ${{ runner.temp }}/execution-logs
           retention-days: 1
 
+  # On a Nimbus runner, on Linux (rules_applecross), writing Nimbus' cache
+  # (`nimbus job cache-write`, by the job's OIDC token: main's alone).
   populate-apple:
-    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate')
-    runs-on: xcode-27
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.run == 'populate' && github.ref == 'refs/heads/main')
+    runs-on: [self-hosted, p2prc-jit]
     timeout-minutes: 180
+    # No write token on a Nimbus runner: a broken main's issue is
+    # populate-apple-report's, on GitHub's runner.
     permissions:
       contents: read
-      # The issue a broken main opens (its last step).
-      issues: write
+      # Nimbus' cache, written by this job (cache-write).
+      id-token: write
     env:
       ISOMER_PLATFORMS: apple
+      CI_NIMBUS: "1"
     steps:
       - uses: actions/checkout@v5
-      - id: cache
-        uses: ./.github/actions/bazel_cache
-        with:
-          group: apple
-          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - name: Nimbus' cache, written by this job
+        run: for i in 1 2 3 4 5 6 7 8 9; do /opt/nimbus/bin/nimbus job cache-write && exit 0; sleep 10; done; exit 1
+      - name: Bazel's settings
+        run: tools/ci/ci_bazel.sh setup
       - name: The merged tree's Apple apps, built into the cache
         run: exec tools/ci/container_build.sh all
       # Without the distribution's settings (alpha-apple's own): what of
       # the Alphas doesn't depend on them.
       - name: The published Apple apps, built into the cache
         run: exec tools/ci/container_build.sh package .ci/packages $PUBLISHED_APPLE
-      - uses: ./.github/actions/bazel_cache_save
-        if: ${{ !cancelled() }}
-        with:
-          group: apple
-          gigabytes: 3
-          repository-hit: ${{ steps.cache.outputs.repository-hit }}
-      # A broken main, seen at night: an issue says so, with the run (one
-      # issue, commented on again while it stays open).
+
+
+  # A broken main, seen at night (populate-apple failed on schedule): an
+  # issue says so, with the run (one issue, commented on again while it
+  # stays open). On GitHub's runner, which alone holds the token that writes
+  # issues: no write token reaches a Nimbus runner.
+  populate-apple-report:
+    needs: populate-apple
+    if: failure() && github.event_name == 'schedule'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
       - name: A broken main, reported
-        if: failure() && github.event_name == 'schedule'
         env:
           GH_TOKEN: ${{ github.token }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          . tools/ci/gh_ready.sh
           title="Nightly Apple build failed on main"
           body="The nightly Apple build (populate-apple) failed on main at $GITHUB_SHA: $RUN_URL"
           open="$(gh issue list --repo "$GITHUB_REPOSITORY" --state open --search "\"$title\" in:title" --json number,title --jq "[.[] | select(.title == \"$title\")][0].number // empty")"
@@ -274,45 +294,45 @@ jobs:
         if: ${{ !cancelled() }}
         run: exec tools/ci/protocol_test.sh
 
+  # On a Nimbus runner, on Linux (rules_applecross), reading Nimbus' cache.
   verify-apple:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'verify' || inputs.run == 'release')
-    runs-on: xcode-27
+    runs-on: [self-hosted, p2prc-jit]
     timeout-minutes: 180
     env:
       ISOMER_PLATFORMS: apple
+      CI_NIMBUS: "1"
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/bazel_cache
-        with:
-          group: apple
-          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
-      - name: Build, with this Mac's Xcode
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - name: Bazel's settings
+        run: tools/ci/ci_bazel.sh setup
+      - name: Build, on Linux with rules_applecross
         run: exec tools/ci/container_build.sh
 
   # --- By hand: the proof ---------------------------------------------------
 
-  # The end-to-end run on GitHub's own Mac (free for a public repository):
-  # two simulators made for the run, the web client in Safari, the live
+  # The end-to-end run on a macOS VM a Nimbus runner leases
+  # (tools/ci/proof_on_vm.sh: xcode_27_2, an hour, renewed, released however
+  # the job ends; no secret goes to it): two simulators made for the run,
+  # the web client in Safari, the live
   # nodes, relay only; written in Reviews' format 2 whatever came of it (a
   # failed run is what the proof is for), the job failing with it. The job
   # keeps its name, which tools/ci/verified.sh and alpha-apple ask for.
   proof:
     if: github.event_name == 'workflow_dispatch' && (inputs.run == 'release' || inputs.run == 'proof')
-    runs-on: xcode-27
+    # The small runner: it only leases the VM and copies files.
+    runs-on: [self-hosted, p2prc-jit-small]
     concurrency:
       group: p2prc-proof-${{ github.ref }}
       cancel-in-progress: false
-    timeout-minutes: 120
-    env:
-      ISOMER_PLATFORMS: apple
+    # The VM can wait for room (Nimbus lends two at a time).
+    timeout-minutes: 150
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/bazel_cache
-        with:
-          group: apple
-          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
       - name: Two clients paired and messaging through the nodes, relayed
-        run: exec tools/ci/e2e_proof.sh "$RUNNER_TEMP/proof" "$RUNNER_TEMP/e2e"
+        run: exec tools/ci/proof_on_vm.sh "$RUNNER_TEMP/proof" "$RUNNER_TEMP/e2e"
       # The run's `proof`, which Reviews reads (and a release's draft carries
       # as proof.zip besides): kept as isomer keeps its own; every other
       # artifact for a day.
@@ -334,65 +354,70 @@ jobs:
 
   # --- By hand on main: a proposal (prerelease, or release once verified) -
 
-  alpha-apple:
-    # The Apple Alphas, built unsigned (alpha signs them), with the
-    # distribution's settings; the version found here and handed to alpha.
-    needs: [verify, verify-apple, proof]
-    if: >-
-      always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
-      (inputs.run == 'prerelease' || (inputs.run == 'release' &&
-      needs.verify.result == 'success' && needs.verify-apple.result == 'success' &&
-      needs.proof.result == 'success'))
-    runs-on: xcode-27
-    # The distribution's settings are the release environment's.
-    environment: release
-    timeout-minutes: 180
+  # The proposal's version, MAJOR.MINOR.N, from the repository's releases
+  # (tools/ci/version_from_tags.sh: the same again for the same commit), on
+  # GitHub's runner: listing the drafts it counts takes `contents: write`,
+  # which no Nimbus runner holds. alpha-apple and alpha stamp it.
+  version:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && (inputs.run == 'prerelease' || inputs.run == 'release')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     permissions:
       # The releases' drafts, which the version is counted from.
       contents: write
     outputs:
       version: ${{ steps.version.outputs.version }}
-    env:
-      ISOMER_PLATFORMS: apple
     steps:
       - uses: actions/checkout@v5
-      - uses: ./.github/actions/bazel_cache
-        with:
-          group: apple
-          buildbuddy-api-key: ${{ secrets.BUILDBUDDY_API_KEY }}
-      # The builds' version, MAJOR.MINOR.N, from the repository's releases
-      # (tools/ci/version_from_tags.sh: the same again for the same
-      # commit), and the commit, stamped into the checkout before the build
-      # (tools/ci/stamp_apps.sh, convo_ci), never committed.
       - id: version
         name: Version
         env:
           GH_TOKEN: ${{ github.token }}
-        run: tools/ci/stamp_apps.sh
-      # Every one set, or the Alphas would carry no UpdateKit or shared
-      # sign-in; each masked besides GitHub's own masking of secrets (the
-      # team shows inside the keychain group's name).
-      - name: The distribution's settings are set
-        env:
-          P2PRC_TEAM_ID: ${{ secrets.P2PRC_TEAM_ID }}
-          P2PRC_APP_GROUP: ${{ secrets.P2PRC_APP_GROUP }}
-          P2PRC_APPLICATIONS_BUNDLE_IDS: ${{ secrets.P2PRC_APPLICATIONS_BUNDLE_IDS }}
-          P2PRC_SHARED_CLIENT_ID: ${{ secrets.P2PRC_SHARED_CLIENT_ID }}
-          P2PRC_SHARED_SERVICE: ${{ secrets.P2PRC_SHARED_SERVICE }}
         run: |
-          for name in P2PRC_TEAM_ID P2PRC_APP_GROUP P2PRC_APPLICATIONS_BUNDLE_IDS P2PRC_SHARED_CLIENT_ID P2PRC_SHARED_SERVICE; do
-            value="$(printenv "$name" || true)"
-            [ -n "$value" ] || { echo "::error::$name is not set: the Alphas would carry no UpdateKit or shared sign-in"; exit 1; }
-            echo "::add-mask::$value"
-          done
-      # exec: the runner's cancel reaches the build.
+          tools/ci/version_from_tags.sh applications/p2prc_ios/Info.plist applications/p2prc_macos/Info.plist
+          version="$(awk '/<key>CFBundleShortVersionString<\/key>/ { found = 1 }
+              found && match($0, /<string>[^<]*<\/string>/) { print substr($0, RSTART + 8, RLENGTH - 17); exit }' applications/p2prc_ios/Info.plist)"
+          echo "version: $version"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+  alpha-apple:
+    # The Apple Alphas, built unsigned (alpha signs them), without the
+    # distribution's settings (alpha stamps them), at the version job's
+    # version, handed on to alpha.
+    needs: [verify, verify-apple, proof, version]
+    if: >-
+      always() && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      needs.version.result == 'success' &&
+      (inputs.run == 'prerelease' || (inputs.run == 'release' &&
+      needs.verify.result == 'success' && needs.verify-apple.result == 'success' &&
+      needs.proof.result == 'success'))
+    # On a Nimbus runner, on Linux (rules_applecross), reading Nimbus' cache.
+    runs-on: [self-hosted, p2prc-jit]
+    # Not the release environment: no secret reaches a Nimbus runner.
+    timeout-minutes: 180
+    # Read-only: no write token on a Nimbus runner.
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ needs.version.outputs.version }}
+    env:
+      ISOMER_PLATFORMS: apple
+      CI_NIMBUS: "1"
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: The job's tools
+        run: tools/ci/job_tools.sh
+      - name: Bazel's settings
+        run: tools/ci/ci_bazel.sh setup
+      # The version job's version and the commit, stamped into the checkout
+      # before the build (tools/ci/stamp_apps.sh, convo_ci), never committed.
+      - name: Version
+        run: tools/ci/stamp_apps.sh "$VERSION"
+      # exec: the runner's cancel reaches the build. No secret here (a
+      # Nimbus runner): the settings are stamped at signing (alpha).
       - name: Build
         env:
-          P2PRC_TEAM_ID: ${{ secrets.P2PRC_TEAM_ID }}
-          P2PRC_APP_GROUP: ${{ secrets.P2PRC_APP_GROUP }}
-          P2PRC_APPLICATIONS_BUNDLE_IDS: ${{ secrets.P2PRC_APPLICATIONS_BUNDLE_IDS }}
-          P2PRC_SHARED_CLIENT_ID: ${{ secrets.P2PRC_SHARED_CLIENT_ID }}
-          P2PRC_SHARED_SERVICE: ${{ secrets.P2PRC_SHARED_SERVICE }}
           # Where Shireworks Kit files the app's crash and bug reports: this repository.
           P2PRC_SHIREWORKS_REPOSITORY: ${{ github.repository }}
         run: exec tools/ci/container_build.sh package .ci/packages $DISTRIBUTION_SETTINGS $PUBLISHED_APPLE
@@ -485,6 +510,13 @@ jobs:
       # its development profile (the one identity P2PRC has for it, which
       # `convo_ci verify-alphas` expects). A platform whose keys aren't set
       # is skipped, saying so in the summary.
+      # The distribution's settings (alpha-apple built the Alphas without
+      # them, on Nimbus), stamped into each app's Info.plist and
+      # entitlements as it is signed (build_tools#18): every one set, or the
+      # Alphas would carry no UpdateKit or shared sign-in; each masked
+      # besides GitHub's own masking of secrets (the team shows inside the
+      # keychain group's name); the Info.plist keys in a file of the job's
+      # own (mode 600), deleted after, never printed.
       - name: Sign the Apple apps
         env:
           APPLE_DEVELOPER_ID_P12: ${{ secrets.APPLE_DEVELOPER_ID_P12 }}
@@ -493,11 +525,37 @@ jobs:
           APPLE_NOTARY_ISSUER: ${{ secrets.APPLE_NOTARY_ISSUER }}
           APPLE_DEVELOPMENT_P12: ${{ secrets.APPLE_DEVELOPMENT_P12 }}
           APPLE_PROFILES: ${{ secrets.APPLE_PROFILES }}
-        run: >-
-          "$BUILD_TOOLS_SIGN" apple --key-from-env --rcodesign "$BUILD_TOOLS_RCODESIGN"
-          --app P2PRC --ipa-kind development --skip-missing-keys
-          --builds "$RUNNER_TEMP/assets/builds.json" --commit "$GITHUB_SHA" --out "$RUNNER_TEMP/assets"
-          .ci/packages/*.ipa .ci/packages/*.zip
+          P2PRC_TEAM_ID: ${{ secrets.P2PRC_TEAM_ID }}
+          P2PRC_APP_GROUP: ${{ secrets.P2PRC_APP_GROUP }}
+          P2PRC_APPLICATIONS_BUNDLE_IDS: ${{ secrets.P2PRC_APPLICATIONS_BUNDLE_IDS }}
+          P2PRC_SHARED_CLIENT_ID: ${{ secrets.P2PRC_SHARED_CLIENT_ID }}
+          P2PRC_SHARED_SERVICE: ${{ secrets.P2PRC_SHARED_SERVICE }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in P2PRC_TEAM_ID P2PRC_APP_GROUP P2PRC_APPLICATIONS_BUNDLE_IDS P2PRC_SHARED_CLIENT_ID P2PRC_SHARED_SERVICE; do
+            value="$(printenv "$name" || true)"
+            [ -n "$value" ] || { echo "::error::$name is not set: the Alphas would carry no UpdateKit or shared sign-in"; exit 1; }
+            echo "::add-mask::$value"
+          done
+          plist="$(mktemp)" groups="$(mktemp)"; chmod 600 "$plist" "$groups"; trap 'rm -f "$plist" "$groups"' EXIT
+          python3 -I -c 'import json, os, sys
+          env = os.environ
+          json.dump({"app": [env["P2PRC_APP_GROUP"]], "keychain": [env["P2PRC_TEAM_ID"] + "." + env["P2PRC_SHARED_SERVICE"]]},
+                    open(sys.argv[2], "w"))
+          json.dump({
+              "GitHubSharedClientID": env["P2PRC_SHARED_CLIENT_ID"],
+              "GitHubSharedKeychainGroup": env["P2PRC_TEAM_ID"] + "." + env["P2PRC_SHARED_SERVICE"],
+              "GitHubSharedLockGroup": env["P2PRC_APP_GROUP"],
+              "GitHubSharedKeychainService": env["P2PRC_SHARED_SERVICE"],
+              "UpdateKitAppGroup": env["P2PRC_APP_GROUP"],
+              "UpdateKitApplicationsBundleIDs": [i.strip() for i in env["P2PRC_APPLICATIONS_BUNDLE_IDS"].split(",") if i.strip()],
+          }, open(sys.argv[1], "w"))' "$plist" "$groups"
+          "$BUILD_TOOLS_SIGN" apple --key-from-env --rcodesign "$BUILD_TOOLS_RCODESIGN" \
+            --app P2PRC --ipa-kind development --skip-missing-keys \
+            --add-infoplist "$plist" --add-groups "$groups" \
+            --builds "$RUNNER_TEMP/assets/builds.json" --commit "$GITHUB_SHA" --out "$RUNNER_TEMP/assets" \
+            .ci/packages/*.ipa .ci/packages/*.zip
       # Android's: its release key, its certificate pinned (ANDROID_PIN),
       # named <App>-<versionName>-android.apk; skipped, saying so in the
       # summary, when the key isn't set. With no pin yet, nothing is signed:

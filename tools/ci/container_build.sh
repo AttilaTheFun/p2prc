@@ -7,11 +7,11 @@
 #   added (tools/ci/job_tools.sh): Google's Android SDK and NDK tools, and
 #   the hermetic JDK, are x86_64 programs, which GitHub's arm64 runners have
 #   nothing to run (no Rosetta);
-# - apple: on GitHub's `xcode-27` Macs (a standard runner, free for a public
-#   repository), with their own Xcode: Apple's SDKs may not be
-#   redistributed, so CI never takes the SDK archive the Apple targets take
-#   on Linux (rules_applecross, .bazelrc's apple_on_linux, for a builder
-#   that has it).
+# - apple: on Nimbus' Linux runners with rules_applecross (.bazelrc's
+#   apple_on_linux, which CI_NIMBUS=1 tools/ci/ci_bazel.sh setup turns on:
+#   Xcode 27.2's SDK archive from Nimbus' files, which serves it to its own
+#   machines alone, Apple's SDKs not being redistributable), or on a Mac
+#   with its own Xcode (the proof's leased VM, a builder's).
 # Bazel's settings (its caches in GitHub's cache, BuildBuddy's) are
 # tools/ci/ci_bazel.sh's, written before this runs (the workflow's
 # .github/actions/bazel_cache).
@@ -62,8 +62,8 @@ for platform in $platforms; do
     if [ "$(uname -s)" = Darwin ] && [ "$platform" != apple ]; then
         echo "container_build.sh: a Mac builds the Apple platforms alone here; $platform is built on Linux" >&2; exit 2
     fi
-    if [ "$(uname -s)" != Darwin ] && [ "$platform" = apple ]; then
-        echo "container_build.sh: the Apple platforms are built on a Mac, with its Xcode" >&2; exit 2
+    if [ "$(uname -s)" != Darwin ] && [ "$platform" = apple ] && ! grep -qsx 'build:linux --config=apple_on_linux' "$ROOT/.bazelrc.user"; then
+        echo "container_build.sh: the Apple platforms are built on a Mac, or on Linux with apple_on_linux (Nimbus' runners: CI_NIMBUS=1 tools/ci/ci_bazel.sh setup)" >&2; exit 2
     fi
 done
 has() { [[ $platforms == *" $1 "* ]]; }
